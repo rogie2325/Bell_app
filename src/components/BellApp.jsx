@@ -43,26 +43,73 @@ const BellApp = () => {
 
   // PWA Install functionality
   useEffect(() => {
+    console.log('🔧 PWA: Setting up install prompt listener...');
+    
     const handleBeforeInstallPrompt = (e) => {
+      console.log('🎯 PWA: beforeinstallprompt event fired!');
       e.preventDefault();
       setDeferredPrompt(e);
       setShowInstallPrompt(true);
     };
 
+    const handleAppInstalled = () => {
+      console.log('✅ PWA: App was installed');
+      setShowInstallPrompt(false);
+      setDeferredPrompt(null);
+    };
+
+    // Check if already installed
+    if (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) {
+      console.log('📱 PWA: App is already installed');
+      setShowInstallPrompt(false);
+    } else {
+      console.log('🌐 PWA: App running in browser, install available');
+    }
+
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    window.addEventListener('appinstalled', handleAppInstalled);
+    
+    // Force show install button for testing (remove this in production)
+    setTimeout(() => {
+      if (!deferredPrompt) {
+        console.log('🧪 PWA: No install prompt detected, showing fallback button');
+        setShowInstallPrompt(true);
+      }
+    }, 3000);
     
     return () => {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+      window.removeEventListener('appinstalled', handleAppInstalled);
     };
-  }, []);
+  }, [deferredPrompt]);
 
   const handleInstallApp = async () => {
+    console.log('🚀 PWA: Install button clicked');
+    
     if (deferredPrompt) {
+      console.log('📲 PWA: Using browser install prompt');
       deferredPrompt.prompt();
       const { outcome } = await deferredPrompt.userChoice;
       console.log(`User response to the install prompt: ${outcome}`);
       setDeferredPrompt(null);
       setShowInstallPrompt(false);
+    } else {
+      console.log('📱 PWA: No deferred prompt, showing manual instructions');
+      // Fallback for browsers that don't support install prompt
+      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+      const isAndroid = /Android/.test(navigator.userAgent);
+      
+      let instructions = '';
+      if (isIOS) {
+        instructions = 'Tap the Share button and select "Add to Home Screen"';
+      } else if (isAndroid) {
+        instructions = 'Tap the menu (⋮) and select "Add to Home Screen" or "Install app"';
+      } else {
+        instructions = 'Use your browser menu to install this app';
+      }
+      
+      alert(`To install the Bell app:\n${instructions}`);
     }
   };
 
