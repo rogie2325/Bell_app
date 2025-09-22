@@ -1,0 +1,1179 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { 
+  Camera, Mic, MicOff, Video, VideoOff, Phone, Users, MessageCircle, 
+  Settings, Monitor, MonitorOff, Send, Menu, X, LogOut, UserPlus, Download 
+} from 'lucide-react';
+
+const BellApp = () => {
+  const [isConnected, setIsConnected] = useState(false);
+  const [roomId, setRoomId] = useState('');
+  const [username, setUsername] = useState('');
+  const [participants, setParticipants] = useState([]);
+  const [messages, setMessages] = useState([]);
+  const [newMessage, setNewMessage] = useState('');
+  const [isVideoEnabled, setIsVideoEnabled] = useState(true);
+  const [isAudioEnabled, setIsAudioEnabled] = useState(true);
+  const [isScreenSharing, setIsScreenSharing] = useState(false);
+  const [currentRoom, setCurrentRoom] = useState(null);
+  const [roomCategory, setRoomCategory] = useState('social');
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isChatOpen, setIsChatOpen] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [authMode, setAuthMode] = useState('login');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [showInstallPrompt, setShowInstallPrompt] = useState(false);
+  
+  // PWA Install functionality
+  const [deferredPrompt, setDeferredPrompt] = useState(null);
+  
+  const localVideoRef = useRef(null);
+  const localStreamRef = useRef(null);
+  const screenStreamRef = useRef(null);
+  const peerConnectionsRef = useRef({});
+  const socketRef = useRef(null);
+  const messagesEndRef = useRef(null);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  useEffect(scrollToBottom, [messages]);
+
+  // PWA Install functionality
+  useEffect(() => {
+    const handleBeforeInstallPrompt = (e) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+      setShowInstallPrompt(true);
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    };
+  }, []);
+
+  const handleInstallApp = async () => {
+    if (deferredPrompt) {
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      console.log(`User response to the install prompt: ${outcome}`);
+      setDeferredPrompt(null);
+      setShowInstallPrompt(false);
+    }
+  };
+
+  // Demo mode - WebSocket connection simulation
+  useEffect(() => {
+    if (isAuthenticated) {
+      // Mock socket connection for demo
+      socketRef.current = {
+        send: (data) => {
+          console.log('Demo: Sending message', JSON.parse(data));
+        },
+        close: () => {
+          console.log('Demo: Socket closed');
+        }
+      };
+      console.log('Demo: Connected to mock server');
+    }
+  }, [isAuthenticated]);
+
+  // Camera initialization - separate useEffect to ensure function is defined
+  useEffect(() => {
+    if (isAuthenticated) {
+      console.log('🎥 Attempting to start camera...');
+      // Small delay to ensure component is ready
+      setTimeout(() => {
+        requestCameraPermissions();
+      }, 100);
+    }
+  }, [isAuthenticated]);
+
+  const requestCameraPermissions = async () => {
+    console.log('🔥 BUTTON CLICKED - Starting camera request...');
+    
+    try {
+      // Check if we're on mobile
+      const isMobile = /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+      console.log('📱 Is mobile device:', isMobile);
+      
+      // Check if we're on HTTPS or localhost
+      const isSecure = window.location.protocol === 'https:' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+      console.log('🔒 Is secure context:', isSecure);
+      
+      if (isMobile && !isSecure) {
+        setError('📱 Mobile devices require HTTPS for camera access. Use the network URL with HTTPS.');
+        return;
+      }
+
+      // Check if getUserMedia is supported
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        console.error('❌ getUserMedia not supported');
+        setError('Camera not supported in this browser');
+        return;
+      }
+
+      console.log('✅ getUserMedia is supported');
+      console.log('🎥 About to request permissions...');
+      
+      // Mobile-friendly constraints
+      const constraints = {
+        video: {
+          facingMode: "user", // Front camera on mobile
+          width: { ideal: 640 },
+          height: { ideal: 480 }
+        },
+        audio: true
+      };
+      
+      console.log('📱 Using constraints:', constraints);
+      
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      
+      console.log('🎉 PERMISSIONS GRANTED! Stream received:', stream);
+      console.log('📹 Video tracks:', stream.getVideoTracks());
+      console.log('🎤 Audio tracks:', stream.getAudioTracks());
+      
+      localStreamRef.current = stream;
+      
+      if (localVideoRef.current) {
+        localVideoRef.current.srcObject = stream;
+        console.log('� Video element updated successfully');
+      } else {
+        console.log('❌ Video element (localVideoRef.current) is null');
+      }
+      
+      setError(''); // Clear any previous errors
+      console.log('✅ Camera setup complete!');
+      
+    } catch (error) {
+      console.error('💥 CAMERA ERROR:', error);
+      console.log('Error name:', error.name);
+      console.log('Error message:', error.message);
+      
+      if (error.name === 'NotAllowedError') {
+        setError('❌ Camera access denied. Please click "Allow" when Chrome asks for permissions.');
+      } else if (error.name === 'NotFoundError') {
+        setError('❌ No camera found. Make sure your camera is connected.');
+      } else if (error.name === 'NotReadableError') {
+        setError('❌ Camera is being used by another app. Close other camera apps and try again.');
+      } else {
+        setError('❌ Camera error: ' + error.message);
+      }
+    }
+  };
+
+  const handleSocketMessage = (data) => {
+    switch (data.type) {
+      case 'room-joined':
+        setIsConnected(true);
+        setCurrentRoom(data.roomId);
+        setParticipants(data.participants || []);
+        break;
+      case 'user-joined':
+        setParticipants(prev => [...prev, data.user]);
+        break;
+      case 'user-left':
+        setParticipants(prev => prev.filter(p => p.id !== data.userId));
+        break;
+      case 'chat-message':
+        setMessages(prev => [...prev, data.message]);
+        break;
+      case 'offer':
+        handleOffer(data.offer, data.sender);
+        break;
+      case 'answer':
+        handleAnswer(data.answer, data.sender);
+        break;
+      case 'ice-candidate':
+        handleIceCandidate(data.candidate, data.sender);
+        break;
+      default:
+        console.log('Unknown message type:', data.type);
+    }
+  };
+
+  const handleOffer = async (offer, senderId) => {
+    try {
+      const pc = createPeerConnection(senderId);
+      await pc.setRemoteDescription(offer);
+      const answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+      
+      socketRef.current.send(JSON.stringify({
+        type: 'answer',
+        answer: answer,
+        target: senderId
+      }));
+    } catch (error) {
+      console.error('Error handling offer:', error);
+    }
+  };
+
+  const handleAnswer = async (answer, senderId) => {
+    try {
+      const pc = peerConnectionsRef.current[senderId];
+      if (pc) {
+        await pc.setRemoteDescription(answer);
+      }
+    } catch (error) {
+      console.error('Error handling answer:', error);
+    }
+  };
+
+  const handleIceCandidate = (candidate, senderId) => {
+    const pc = peerConnectionsRef.current[senderId];
+    if (pc) {
+      pc.addIceCandidate(candidate).catch(console.error);
+    }
+  };
+
+  const createPeerConnection = (userId) => {
+    const pc = new RTCPeerConnection({
+      iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' }
+      ]
+    });
+
+    pc.onicecandidate = (event) => {
+      if (event.candidate) {
+        socketRef.current.send(JSON.stringify({
+          type: 'ice-candidate',
+          candidate: event.candidate,
+          target: userId
+        }));
+      }
+    };
+
+    pc.ontrack = (event) => {
+      // Handle incoming video stream
+      const videoElement = document.getElementById(`video-${userId}`);
+      if (videoElement) {
+        videoElement.srcObject = event.streams[0];
+      }
+    };
+
+    if (localStreamRef.current) {
+      localStreamRef.current.getTracks().forEach(track => {
+        pc.addTrack(track, localStreamRef.current);
+      });
+    }
+
+    peerConnectionsRef.current[userId] = pc;
+    return pc;
+  };
+
+  const categories = [
+    { id: 'social', name: 'Social', icon: '😊', color: 'bg-purple-500' },
+    { id: 'business', name: 'Business', icon: '💼', color: 'bg-blue-500' },
+    { id: 'study', name: 'Study Group', icon: '📚', color: 'bg-green-500' },
+    { id: 'music', name: 'Music', icon: '🎵', color: 'bg-pink-500' },
+    { id: 'health', name: 'Wellness', icon: '🏥', color: 'bg-teal-500' }
+  ];
+
+  const login = async () => {
+    try {
+      // Demo login - no backend required
+      if (email && password) {
+        const mockToken = 'demo_token_' + Date.now();
+        localStorage.setItem('bell_token', mockToken);
+        setIsAuthenticated(true);
+        setUsername(email.split('@')[0] || 'User'); // Use email prefix as username
+        setError('');
+      } else {
+        setError('Please enter email and password');
+      }
+    } catch (error) {
+      setError('Login failed. Please try again.');
+    }
+  };
+
+  const register = async () => {
+    try {
+      // Demo registration - no backend required
+      if (username && email && password) {
+        if (password.length < 6) {
+          setError('Password must be at least 6 characters long');
+          return;
+        }
+        const mockToken = 'demo_token_' + Date.now();
+        localStorage.setItem('bell_token', mockToken);
+        setIsAuthenticated(true);
+        setError('');
+      } else {
+        setError('Please fill in all fields');
+      }
+    } catch (error) {
+      setError('Registration failed. Please try again.');
+    }
+  };
+
+  const startLocalVideo = async () => {
+    try {
+      // Stop any existing streams first
+      if (localStreamRef.current) {
+        localStreamRef.current.getTracks().forEach(track => track.stop());
+      }
+      
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: true, // Always request video initially
+        audio: true  // Always request audio initially
+      });
+      
+      localStreamRef.current = stream;
+      if (localVideoRef.current) {
+        localVideoRef.current.srcObject = stream;
+      }
+      
+      // Apply current video/audio settings
+      stream.getVideoTracks().forEach(track => {
+        track.enabled = isVideoEnabled;
+      });
+      stream.getAudioTracks().forEach(track => {
+        track.enabled = isAudioEnabled;
+      });
+      
+      console.log('Camera started successfully');
+      return stream;
+    } catch (error) {
+      console.error('Error accessing media devices:', error);
+      if (error.name === 'NotAllowedError') {
+        setError('Camera/microphone access denied. Please allow permissions and refresh.');
+      } else if (error.name === 'NotFoundError') {
+        setError('No camera or microphone found.');
+      } else {
+        setError('Failed to access camera/microphone: ' + error.message);
+      }
+      return null;
+    }
+  };
+
+  const startScreenShare = async () => {
+    try {
+      console.log('🖥️ Starting screen share...');
+      
+      // Enhanced mobile detection
+      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+                      (navigator.maxTouchPoints && navigator.maxTouchPoints > 2);
+      
+      // Check if browser supports screen sharing
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+        const mobileFallbackMsg = isMobile ? 
+          'Screen sharing is not supported on most mobile browsers. Please use a desktop browser for screen sharing.' :
+          'Screen sharing is not supported in this browser';
+        setError(mobileFallbackMsg);
+        console.log('❌ Screen sharing not supported:', mobileFallbackMsg);
+        return;
+      }
+
+      // Mobile-specific screen share constraints
+      const constraints = isMobile ? {
+        video: {
+          width: { ideal: 1280, max: 1920 },
+          height: { ideal: 720, max: 1080 },
+          frameRate: { ideal: 15, max: 30 }
+        },
+        audio: false
+      } : {
+        video: {
+          displaySurface: "monitor",
+        },
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          sampleRate: 44100
+        }
+      };
+
+      console.log('📱 Mobile device detected:', isMobile);
+      console.log('🔧 Using constraints:', constraints);
+
+      const stream = await navigator.mediaDevices.getDisplayMedia(constraints);
+      
+      screenStreamRef.current = stream;
+      setIsScreenSharing(true);
+      
+      // Update local video element to show screen share
+      if (localVideoRef.current) {
+        localVideoRef.current.srcObject = stream;
+        
+        // Mobile-specific video settings for screen share
+        if (isMobile) {
+          localVideoRef.current.playsInline = true;
+          localVideoRef.current.muted = true;
+          setTimeout(() => {
+            if (localVideoRef.current) {
+              localVideoRef.current.play().catch(e => console.log('📱 Screen share video play failed:', e));
+            }
+          }, 100);
+        }
+      }
+      
+      // Handle when user stops sharing via browser UI
+      stream.getVideoTracks()[0].addEventListener('ended', () => {
+        console.log('Screen sharing ended by user');
+        stopScreenShare();
+      });
+
+      socketRef.current.send(JSON.stringify({
+        type: 'start-screen-share'
+      }));
+      
+      console.log('✅ Screen sharing started successfully');
+      
+    } catch (error) {
+      console.error('💥 Screen share failed:', error);
+      
+      // Enhanced mobile error handling
+      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+                      (navigator.maxTouchPoints && navigator.maxTouchPoints > 2);
+      
+      if (error.name === 'NotAllowedError') {
+        const mobileMsg = isMobile ? 
+          'Screen sharing permission denied. Note: Screen sharing has limited support on mobile devices.' :
+          'Screen sharing permission denied';
+        setError(mobileMsg);
+      } else if (error.name === 'NotSupportedError') {
+        const mobileMsg = isMobile ? 
+          'Screen sharing is not supported on this mobile browser. Please try using a desktop browser.' :
+          'Screen sharing not supported in this browser';
+        setError(mobileMsg);
+      } else {
+        const mobileMsg = isMobile ? 
+          `Screen sharing failed on mobile: ${error.message}. Mobile browsers have limited screen sharing support.` :
+          'Screen sharing failed: ' + error.message;
+        setError(mobileMsg);
+      }
+      setIsScreenSharing(false);
+    }
+  };
+
+  const stopScreenShare = async () => {
+    console.log('Stopping screen share...');
+    
+    if (screenStreamRef.current) {
+      screenStreamRef.current.getTracks().forEach(track => {
+        track.stop();
+        console.log('Stopped track:', track.kind);
+      });
+      screenStreamRef.current = null;
+    }
+    
+    setIsScreenSharing(false);
+    
+    // Switch back to camera
+    console.log('Switching back to camera...');
+    await startLocalVideo();
+    
+    socketRef.current.send(JSON.stringify({
+      type: 'stop-screen-share'
+    }));
+    
+    console.log('Screen sharing stopped successfully');
+  };
+
+  const joinRoom = async () => {
+    if (!username || !roomId) return;
+    
+    await startLocalVideo();
+    
+    // Demo mode - simulate successful room join
+    setTimeout(() => {
+      setIsConnected(true);
+      setCurrentRoom(roomId);
+      // Add some mock participants for demo
+      setParticipants([
+        { id: 'demo1', name: 'Demo User 1', video: true, audio: true, screenSharing: false },
+        { id: 'demo2', name: 'Demo User 2', video: false, audio: true, screenSharing: false }
+      ]);
+    }, 1000);
+    
+    socketRef.current.send(JSON.stringify({
+      type: 'join-room',
+      roomId: roomId,
+      username: username,
+      category: roomCategory
+    }));
+  };
+
+  const leaveRoom = () => {
+    if (localStreamRef.current) {
+      localStreamRef.current.getTracks().forEach(track => track.stop());
+    }
+    
+    if (screenStreamRef.current) {
+      screenStreamRef.current.getTracks().forEach(track => track.stop());
+    }
+    
+    Object.values(peerConnectionsRef.current).forEach(pc => {
+      pc.close();
+    });
+    peerConnectionsRef.current = {};
+    
+    socketRef.current.send(JSON.stringify({ type: 'leave-room' }));
+    
+    setIsConnected(false);
+    setCurrentRoom(null);
+    setParticipants([]);
+    setMessages([]);
+    setIsScreenSharing(false);
+  };
+
+  const toggleVideo = () => {
+    const newVideoState = !isVideoEnabled;
+    setIsVideoEnabled(newVideoState);
+    
+    if (localStreamRef.current) {
+      localStreamRef.current.getVideoTracks().forEach(track => {
+        track.enabled = newVideoState;
+        console.log('Video track enabled:', newVideoState);
+      });
+    }
+    
+    socketRef.current.send(JSON.stringify({
+      type: 'toggle-video',
+      enabled: newVideoState
+    }));
+  };
+
+  const toggleAudio = () => {
+    const newAudioState = !isAudioEnabled;
+    setIsAudioEnabled(newAudioState);
+    
+    if (localStreamRef.current) {
+      localStreamRef.current.getAudioTracks().forEach(track => {
+        track.enabled = newAudioState;
+        console.log('Audio track enabled:', newAudioState);
+      });
+    }
+    
+    socketRef.current.send(JSON.stringify({
+      type: 'toggle-audio',
+      enabled: newAudioState
+    }));
+  };
+
+  const sendMessage = () => {
+    if (!newMessage.trim()) return;
+    
+    const message = {
+      id: Date.now(),
+      user: username,
+      text: newMessage,
+      timestamp: new Date().toLocaleTimeString()
+    };
+    
+    // Demo mode - add message directly to state
+    setMessages(prev => [...prev, message]);
+    
+    socketRef.current.send(JSON.stringify({
+      type: 'chat-message',
+      roomId: currentRoom,
+      message: newMessage
+    }));
+    
+    setNewMessage('');
+  };
+
+  const logout = () => {
+    localStorage.removeItem('bell_token');
+    setIsAuthenticated(false);
+    setIsConnected(false);
+    if (socketRef.current) {
+      socketRef.current.close();
+    }
+  };
+
+  // Check for existing auth token
+  useEffect(() => {
+    const token = localStorage.getItem('bell_token');
+    if (token) {
+      // In a real app, verify token with server
+      setIsAuthenticated(true);
+      setUsername('User'); // Get from token
+    }
+  }, []);
+
+  // Authentication Screen
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 flex items-center justify-center p-4">
+        <div className="bg-white/10 backdrop-blur-lg rounded-2xl p-8 w-full max-w-md border border-white/20">
+          <div className="text-center mb-8">
+            <div className="text-6xl mb-4">🔔</div>
+            <h1 className="text-4xl font-bold text-white mb-2">Bell</h1>
+            <p className="text-gray-300">Connect and collaborate live</p>
+            <p className="text-xs text-gray-400">Created by Elijah Rose</p>
+            
+            {/* PWA Install Button */}
+            {showInstallPrompt && (
+              <button
+                onClick={handleInstallApp}
+                className="mt-4 flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-lg transition-all transform hover:scale-105"
+              >
+                <Download size={16} />
+                Install App
+              </button>
+            )}
+          </div>
+          
+          <div className="flex mb-6">
+            <button
+              onClick={() => setAuthMode('login')}
+              className={`flex-1 py-2 px-4 rounded-l-lg font-medium transition-all ${
+                authMode === 'login' 
+                  ? 'bg-purple-600 text-white' 
+                  : 'bg-white/10 text-gray-300 hover:bg-white/20'
+              }`}
+            >
+              Login
+            </button>
+            <button
+              onClick={() => setAuthMode('register')}
+              className={`flex-1 py-2 px-4 rounded-r-lg font-medium transition-all ${
+                authMode === 'register' 
+                  ? 'bg-purple-600 text-white' 
+                  : 'bg-white/10 text-gray-300 hover:bg-white/20'
+              }`}
+            >
+              Register
+            </button>
+          </div>
+          
+          {error && (
+            <div className="bg-red-500/20 border border-red-500 text-red-300 px-4 py-3 rounded-lg mb-4">
+              {error}
+            </div>
+          )}
+          
+          <div className="space-y-4">
+            {authMode === 'register' && (
+              <input
+                type="text"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                className="w-full px-4 py-3 rounded-lg bg-white/20 border border-white/30 text-white placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                placeholder="Username"
+              />
+            )}
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="w-full px-4 py-3 rounded-lg bg-white/20 border border-white/30 text-white placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-purple-500"
+              placeholder="Email"
+            />
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full px-4 py-3 rounded-lg bg-white/20 border border-white/30 text-white placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-purple-500"
+              placeholder="Password"
+              onKeyPress={(e) => e.key === 'Enter' && (authMode === 'login' ? login() : register())}
+            />
+            <button
+              onClick={authMode === 'login' ? login : register}
+              className="w-full py-4 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg font-semibold hover:from-purple-700 hover:to-pink-700 transition-all"
+            >
+              {authMode === 'login' ? 'Login' : 'Create Account'}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Room Join Screen
+  if (!isConnected) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 flex items-center justify-center p-4">
+        <div className="bg-white/10 backdrop-blur-lg rounded-2xl p-8 w-full max-w-md border border-white/20">
+          <div className="flex justify-between items-center mb-8">
+            <div>
+              <div className="text-6xl mb-4">🔔</div>
+              <h1 className="text-4xl font-bold text-white mb-2">Bell</h1>
+              <p className="text-gray-300">Welcome, {username}!</p>
+            </div>
+            <button
+              onClick={logout}
+              className="text-gray-400 hover:text-white p-2"
+            >
+              <LogOut className="h-5 w-5" />
+            </button>
+          </div>
+
+          {/* Big Camera Test Button */}
+          {!localStreamRef.current && (
+            <div className="mb-6 p-4 bg-red-600/20 border border-red-500 rounded-lg">
+              <div className="text-center">
+                <h3 className="text-white font-semibold mb-2">🎥 Camera Access Required</h3>
+                <p className="text-gray-300 text-sm mb-3">Click below to enable your camera and microphone</p>
+                <button
+                  onClick={() => {
+                    console.log('🔴 RED BUTTON CLICKED!');
+                    alert('Button clicked! Check console for details.');
+                    requestCameraPermissions();
+                  }}
+                  className="w-full py-3 bg-red-600 hover:bg-red-700 text-white rounded-lg font-semibold animate-pulse"
+                >
+                  Enable Camera & Microphone
+                </button>
+              </div>
+            </div>
+          )}
+          
+          <div className="space-y-4">
+            {/* Camera Preview */}
+            <div>
+              <label className="block text-white mb-2 font-medium">Camera Preview</label>
+              <div className="relative bg-gray-800 rounded-lg overflow-hidden aspect-video mb-4">
+                <video
+                  ref={localVideoRef}
+                  autoPlay
+                  muted
+                  playsInline
+                  className="w-full h-full object-cover"
+                />
+                {!localStreamRef.current && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-gray-800">
+                    <div className="text-center text-gray-400">
+                      <div className="text-4xl mb-2">📹</div>
+                      <p className="text-sm mb-2">Camera not started</p>
+                      <button
+                        onClick={requestCameraPermissions}
+                        className="mt-2 px-6 py-3 bg-red-600 hover:bg-red-700 text-white rounded-lg font-semibold text-sm animate-pulse"
+                      >
+                        🎥 Enable Camera Now
+                      </button>
+                      {error && (
+                        <p className="text-red-300 text-xs mt-2 max-w-xs">{error}</p>
+                      )}
+                    </div>
+                  </div>
+                )}
+                <div className="absolute top-2 right-2 flex space-x-1">
+                  {!isVideoEnabled && (
+                    <div className="bg-red-600 p-1 rounded">
+                      <VideoOff className="h-3 w-3 text-white" />
+                    </div>
+                  )}
+                  {!isAudioEnabled && (
+                    <div className="bg-red-600 p-1 rounded">
+                      <MicOff className="h-3 w-3 text-white" />
+                    </div>
+                  )}
+                </div>
+                <div className="absolute bottom-2 left-2 flex space-x-2">
+                  <button
+                    onClick={toggleVideo}
+                    className={`p-2 rounded-full text-white ${
+                      isVideoEnabled ? 'bg-gray-700 hover:bg-gray-600' : 'bg-red-600 hover:bg-red-700'
+                    }`}
+                  >
+                    {isVideoEnabled ? <Video className="h-4 w-4" /> : <VideoOff className="h-4 w-4" />}
+                  </button>
+                  <button
+                    onClick={toggleAudio}
+                    className={`p-2 rounded-full text-white ${
+                      isAudioEnabled ? 'bg-gray-700 hover:bg-gray-600' : 'bg-red-600 hover:bg-red-700'
+                    }`}
+                  >
+                    {isAudioEnabled ? <Mic className="h-4 w-4" /> : <MicOff className="h-4 w-4" />}
+                  </button>
+                </div>
+              </div>
+            </div>
+            
+            <div>
+              <label className="block text-white mb-2 font-medium">Room Category</label>
+              <div className="grid grid-cols-2 gap-2">
+                {categories.map(category => (
+                  <button
+                    key={category.id}
+                    onClick={() => setRoomCategory(category.id)}
+                    className={`p-3 rounded-lg border-2 transition-all ${
+                      roomCategory === category.id
+                        ? `${category.color} border-white text-white`
+                        : 'bg-white/10 border-white/30 text-gray-300 hover:bg-white/20'
+                    }`}
+                  >
+                    <div className="text-xl mb-1">{category.icon}</div>
+                    <div className="text-sm font-medium">{category.name}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+            
+            <div>
+              <label className="block text-white mb-2 font-medium">Room ID</label>
+              <input
+                type="text"
+                value={roomId}
+                onChange={(e) => setRoomId(e.target.value)}
+                className="w-full px-4 py-3 rounded-lg bg-white/20 border border-white/30 text-white placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                placeholder="Enter room ID or create new"
+                onKeyPress={(e) => e.key === 'Enter' && joinRoom()}
+              />
+            </div>
+            
+            <button
+              onClick={joinRoom}
+              disabled={!roomId}
+              className="w-full py-4 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg font-semibold disabled:opacity-50 disabled:cursor-not-allowed hover:from-purple-700 hover:to-pink-700 transition-all"
+            >
+              Join Room
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-900 flex flex-col">
+      {/* Mobile Header */}
+      <div className="lg:hidden bg-gray-800 border-b border-gray-700 p-4 flex items-center justify-between">
+        <div className="flex items-center space-x-3">
+          <div className="text-2xl">🔔</div>
+          <div>
+            <h1 className="text-white font-semibold text-sm">Room: {currentRoom}</h1>
+            <p className="text-gray-400 text-xs">
+              {categories.find(c => c.id === roomCategory)?.icon} {categories.find(c => c.id === roomCategory)?.name}
+            </p>
+          </div>
+        </div>
+        
+        <div className="flex items-center space-x-2">
+          <button
+            onClick={() => setIsChatOpen(!isChatOpen)}
+            className="lg:hidden p-2 text-gray-400 hover:text-white"
+          >
+            <MessageCircle className="h-5 w-5" />
+          </button>
+          <button
+            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+            className="lg:hidden p-2 text-gray-400 hover:text-white"
+          >
+            {isMobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+          </button>
+        </div>
+      </div>
+
+      {/* Desktop Header */}
+      <div className="hidden lg:flex bg-gray-800 border-b border-gray-700 p-4 items-center justify-between">
+        <div className="flex items-center space-x-3">
+          <div className="text-2xl">🔔</div>
+          <div>
+            <h1 className="text-white font-semibold">Room: {currentRoom}</h1>
+            <p className="text-gray-400 text-sm">
+              {categories.find(c => c.id === roomCategory)?.icon} {categories.find(c => c.id === roomCategory)?.name}
+            </p>
+          </div>
+        </div>
+        
+        <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-2 text-gray-400">
+            <Users className="h-4 w-4" />
+            <span className="text-sm">{participants.length + 1}/8</span>
+          </div>
+          <button
+            onClick={logout}
+            className="p-2 text-gray-400 hover:text-white"
+          >
+            <LogOut className="h-4 w-4" />
+          </button>
+          <button
+            onClick={leaveRoom}
+            className="bg-red-600 hover:bg-red-700 text-white p-2 rounded-lg transition-colors"
+          >
+            <Phone className="h-4 w-4" />
+          </button>
+        </div>
+      </div>
+
+      {/* Mobile Menu Overlay */}
+      {isMobileMenuOpen && (
+        <div className="lg:hidden fixed inset-0 z-50 bg-black/50" onClick={() => setIsMobileMenuOpen(false)}>
+          <div className="absolute top-0 right-0 w-64 h-full bg-gray-800 p-4 transform transition-transform">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-white font-semibold">Room Info</h3>
+              <button onClick={() => setIsMobileMenuOpen(false)}>
+                <X className="h-5 w-5 text-gray-400" />
+              </button>
+            </div>
+            <div className="space-y-4">
+              <div className="flex items-center space-x-2 text-gray-400">
+                <Users className="h-4 w-4" />
+                <span className="text-sm">{participants.length + 1}/8 participants</span>
+              </div>
+              <button
+                onClick={() => {
+                  logout();
+                  setIsMobileMenuOpen(false);
+                }}
+                className="w-full flex items-center space-x-2 p-3 text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg"
+              >
+                <LogOut className="h-4 w-4" />
+                <span>Logout</span>
+              </button>
+              <button
+                onClick={() => {
+                  leaveRoom();
+                  setIsMobileMenuOpen(false);
+                }}
+                className="w-full flex items-center space-x-2 p-3 bg-red-600 hover:bg-red-700 text-white rounded-lg"
+              >
+                <Phone className="h-4 w-4" />
+                <span>Leave Room</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="flex-1 flex flex-col lg:flex-row">
+        {/* Video Grid */}
+        <div className="flex-1 p-2 lg:p-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2 lg:gap-4 h-full">
+            {/* Local Video */}
+            <div className="relative bg-gray-800 rounded-lg overflow-hidden aspect-video">
+              <video
+                ref={localVideoRef}
+                autoPlay
+                muted
+                playsInline
+                className="w-full h-full object-cover"
+              />
+              <div className="absolute bottom-2 left-2 bg-black/50 text-white px-2 py-1 rounded text-xs lg:text-sm">
+                {username} (You)
+              </div>
+              <div className="absolute top-2 right-2 flex space-x-1">
+                {isScreenSharing && (
+                  <div className="bg-green-600 p-1 rounded">
+                    <Monitor className="h-3 w-3 text-white" />
+                  </div>
+                )}
+                {!isVideoEnabled && (
+                  <div className="bg-red-600 p-1 rounded">
+                    <VideoOff className="h-3 w-3 text-white" />
+                  </div>
+                )}
+                {!isAudioEnabled && (
+                  <div className="bg-red-600 p-1 rounded">
+                    <MicOff className="h-3 w-3 text-white" />
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Remote Videos */}
+            {participants.map((participant, index) => (
+              <div key={participant.id} className="relative bg-gray-800 rounded-lg overflow-hidden aspect-video">
+                <video
+                  id={`video-${participant.id}`}
+                  autoPlay
+                  playsInline
+                  className="w-full h-full object-cover"
+                />
+                <div className="w-full h-full flex items-center justify-center">
+                  <div className="text-4xl lg:text-6xl">
+                    {participant.video ? '🎥' : '👤'}
+                  </div>
+                </div>
+                <div className="absolute bottom-2 left-2 bg-black/50 text-white px-2 py-1 rounded text-xs lg:text-sm">
+                  {participant.name}
+                </div>
+                <div className="absolute top-2 right-2 flex space-x-1">
+                  {participant.screenSharing && (
+                    <div className="bg-green-600 p-1 rounded">
+                      <Monitor className="h-3 w-3 text-white" />
+                    </div>
+                  )}
+                  {!participant.video && (
+                    <div className="bg-red-600 p-1 rounded">
+                      <VideoOff className="h-3 w-3 text-white" />
+                    </div>
+                  )}
+                  {!participant.audio && (
+                    <div className="bg-red-600 p-1 rounded">
+                      <MicOff className="h-3 w-3 text-white" />
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+
+            {/* Empty Slots */}
+            {Array.from({ length: Math.max(0, 8 - participants.length - 1) }).map((_, index) => (
+              <div key={`empty-${index}`} className="bg-gray-800/50 rounded-lg border-2 border-dashed border-gray-600 flex items-center justify-center aspect-video">
+                <div className="text-gray-500 text-center">
+                  <Users className="h-6 w-6 lg:h-8 lg:w-8 mx-auto mb-2" />
+                  <p className="text-xs lg:text-sm">Waiting for participant</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Chat Sidebar - Desktop */}
+        <div className={`hidden lg:flex w-80 bg-gray-800 border-l border-gray-700 flex-col`}>
+          <div className="p-4 border-b border-gray-700">
+            <h3 className="text-white font-semibold flex items-center">
+              <MessageCircle className="h-4 w-4 mr-2" />
+              Chat
+            </h3>
+          </div>
+          
+          <div className="flex-1 overflow-y-auto p-4 space-y-3">
+            {messages.map(message => (
+              <div key={message.id} className="text-sm">
+                <div className="text-gray-400 mb-1">
+                  <span className="font-medium text-white">{message.user}</span>
+                  <span className="ml-2 text-xs">{message.timestamp}</span>
+                </div>
+                <div className="text-gray-300">{message.text}</div>
+              </div>
+            ))}
+            {messages.length === 0 && (
+              <div className="text-gray-500 text-center">
+                No messages yet. Start the conversation!
+              </div>
+            )}
+            <div ref={messagesEndRef} />
+          </div>
+          
+          <div className="p-4 border-t border-gray-700">
+            <div className="flex space-x-2">
+              <input
+                type="text"
+                value={newMessage}
+                onChange={(e) => setNewMessage(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
+                className="flex-1 px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm"
+                placeholder="Type a message..."
+              />
+              <button
+                onClick={sendMessage}
+                className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg transition-colors"
+              >
+                <Send className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Chat Sidebar - Mobile Overlay */}
+        {isChatOpen && (
+          <div className="lg:hidden fixed inset-0 z-40 bg-black/50" onClick={() => setIsChatOpen(false)}>
+            <div className="absolute bottom-0 left-0 right-0 h-2/3 bg-gray-800 flex flex-col transform transition-transform">
+              <div className="p-4 border-b border-gray-700 flex justify-between items-center">
+                <h3 className="text-white font-semibold flex items-center">
+                  <MessageCircle className="h-4 w-4 mr-2" />
+                  Chat
+                </h3>
+                <button onClick={() => setIsChatOpen(false)}>
+                  <X className="h-5 w-5 text-gray-400" />
+                </button>
+              </div>
+              
+              <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                {messages.map(message => (
+                  <div key={message.id} className="text-sm">
+                    <div className="text-gray-400 mb-1">
+                      <span className="font-medium text-white">{message.user}</span>
+                      <span className="ml-2 text-xs">{message.timestamp}</span>
+                    </div>
+                    <div className="text-gray-300">{message.text}</div>
+                  </div>
+                ))}
+                {messages.length === 0 && (
+                  <div className="text-gray-500 text-center">
+                    No messages yet. Start the conversation!
+                  </div>
+                )}
+                <div ref={messagesEndRef} />
+              </div>
+              
+              <div className="p-4 border-t border-gray-700">
+                <div className="flex space-x-2">
+                  <input
+                    type="text"
+                    value={newMessage}
+                    onChange={(e) => setNewMessage(e.target.value)}
+                    onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
+                    className="flex-1 px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm"
+                    placeholder="Type a message..."
+                  />
+                  <button
+                    onClick={sendMessage}
+                    className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg transition-colors"
+                  >
+                    <Send className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Control Bar */}
+      <div className="bg-gray-800 border-t border-gray-700 p-4">
+        <div className="flex justify-center items-center space-x-4">
+          <button
+            onClick={toggleAudio}
+            className={`p-3 rounded-full transition-colors ${
+              isAudioEnabled ? 'bg-gray-700 hover:bg-gray-600' : 'bg-red-600 hover:bg-red-700'
+            }`}
+          >
+            {isAudioEnabled ? (
+              <Mic className="h-5 w-5 text-white" />
+            ) : (
+              <MicOff className="h-5 w-5 text-white" />
+            )}
+          </button>
+          
+          <button
+            onClick={toggleVideo}
+            className={`p-3 rounded-full transition-colors ${
+              isVideoEnabled ? 'bg-gray-700 hover:bg-gray-600' : 'bg-red-600 hover:bg-red-700'
+            }`}
+          >
+            {isVideoEnabled ? (
+              <Video className="h-5 w-5 text-white" />
+            ) : (
+              <VideoOff className="h-5 w-5 text-white" />
+            )}
+          </button>
+          
+          <button
+            onClick={isScreenSharing ? stopScreenShare : startScreenShare}
+            className={`p-3 rounded-full transition-colors ${
+              isScreenSharing ? 'bg-green-600 hover:bg-green-700' : 'bg-gray-700 hover:bg-gray-600'
+            }`}
+          >
+            {isScreenSharing ? (
+              <MonitorOff className="h-5 w-5 text-white" />
+            ) : (
+              <Monitor className="h-5 w-5 text-white" />
+            )}
+          </button>
+          
+          <button
+            onClick={leaveRoom}
+            className="p-3 bg-red-600 hover:bg-red-700 rounded-full transition-colors lg:hidden"
+          >
+            <Phone className="h-5 w-5 text-white" />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default BellApp;
