@@ -701,6 +701,7 @@ const BellApp = () => {
     
     try {
       console.log('🏠 Joining room:', roomId);
+      setError('Connecting...'); // Show progress
       
       // Create currentUser if it doesn't exist (for direct room joining)
       let userToUse = currentUser;
@@ -720,41 +721,58 @@ const BellApp = () => {
       // Ensure WebSocket is connected
       if (!socketRef.current || socketRef.current.readyState !== WebSocket.OPEN) {
         console.log('🔌 WebSocket not connected, connecting now...');
-        const ws = new WebSocket('wss://socketsbay.com/wss/v2/2/demo/');
+        setError('Connecting to server...');
         
-        await new Promise((resolve, reject) => {
-          const timeout = setTimeout(() => {
-            reject(new Error('WebSocket connection timeout'));
-          }, 10000);
+        try {
+          const ws = new WebSocket('wss://socketsbay.com/wss/v2/2/demo/');
           
-          ws.onopen = () => {
-            clearTimeout(timeout);
-            console.log('✅ WebSocket connected for room join');
-            setIsConnected(true);
-            resolve();
-          };
+          await new Promise((resolve, reject) => {
+            const timeout = setTimeout(() => {
+              reject(new Error('Connection timeout - server may be unavailable'));
+            }, 10000);
+            
+            ws.onopen = () => {
+              clearTimeout(timeout);
+              console.log('✅ WebSocket connected for room join');
+              setIsConnected(true);
+              resolve();
+            };
+            
+            ws.onerror = (error) => {
+              clearTimeout(timeout);
+              console.error('❌ WebSocket connection error:', error);
+              reject(new Error('Failed to connect to server'));
+            };
+            
+            ws.onclose = () => {
+              console.log('🔌 WebSocket closed');
+              setIsConnected(false);
+            };
+            
+            ws.onmessage = (event) => {
+              console.log('📨 WebSocket message received:', event.data);
+            };
+          });
           
-          ws.onerror = (error) => {
-            clearTimeout(timeout);
-            console.error('❌ WebSocket connection error:', error);
-            reject(error);
-          };
-          
-          ws.onclose = () => {
-            console.log('🔌 WebSocket closed');
-            setIsConnected(false);
-          };
-          
-          ws.onmessage = (event) => {
-            console.log('📨 WebSocket message received:', event.data);
-          };
-        });
-        
-        socketRef.current = ws;
+          socketRef.current = ws;
+        } catch (wsError) {
+          console.error('❌ WebSocket setup failed:', wsError);
+          setError(`Connection failed: ${wsError.message}`);
+          return;
+        }
       }
       
-      console.log('🎥 Requesting camera permissions...');
-      await requestCameraPermissions();
+      // Try to get camera permissions, but don't fail if it doesn't work
+      console.log('🎥 Requesting camera permissions (optional)...');
+      setError('Getting camera permissions...');
+      
+      try {
+        await requestCameraPermissions();
+        console.log('✅ Camera permissions granted');
+      } catch (cameraError) {
+        console.log('⚠️ Camera permissions failed, continuing without camera:', cameraError.message);
+        // Continue without camera - user can enable it later
+      }
       
       // Send join room message to other users
       if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
@@ -771,14 +789,29 @@ const BellApp = () => {
         
         setCurrentRoom(roomId);
         setIsConnected(true);
-        console.log('✅ Room join request sent successfully');
+        setError(''); // Clear error on success
+        console.log('✅ Successfully joined room!');
       } else {
-        console.log('❌ WebSocket not ready');
-        setError('Not connected to server. Please try again.');
+        console.log('❌ WebSocket not ready after connection attempt');
+        setError('Connection lost. Please try again.');
+        return;
       }
     } catch (error) {
       console.error('💥 Failed to join room:', error);
-      setError(`Failed to join room: ${error.message}. Please check your camera/microphone permissions.`);
+      console.log('Error details:', {
+        name: error?.name,
+        message: error?.message,
+        stack: error?.stack
+      });
+      
+      let errorMessage = 'Unknown error occurred';
+      if (error?.message) {
+        errorMessage = error.message;
+      } else if (typeof error === 'string') {
+        errorMessage = error;
+      }
+      
+      setError(`Failed to join room: ${errorMessage}`);
     }
   };
 
@@ -1114,20 +1147,26 @@ const BellApp = () => {
               </div>
             )}
             
-            <button
-              onClick={(e) => {
-                e.preventDefault();
-                setError(''); // Clear previous errors
-                console.log('🔴 BUTTON CLICKED! Event:', e);
-                console.log('📝 Username value:', username);
-                console.log('📝 RoomId value:', roomId);
-                joinRoom();
-              }}
-              disabled={!roomId || !username}
-              className="w-full py-4 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg font-semibold disabled:opacity-50 disabled:cursor-not-allowed hover:from-purple-700 hover:to-pink-700 transition-all"
-            >
-              Join Room {!username ? '(Enter Username)' : !roomId ? '(Enter Room ID)' : ''}
-            </button>
+            <div className="space-y-3">
+              <button
+                onClick={(e) => {
+                  e.preventDefault();
+                  setError(''); // Clear previous errors
+                  console.log('🔴 BUTTON CLICKED! Event:', e);
+                  console.log('📝 Username value:', username);
+                  console.log('📝 RoomId value:', roomId);
+                  joinRoom();
+                }}
+                disabled={!roomId || !username}
+                className="w-full py-4 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg font-semibold disabled:opacity-50 disabled:cursor-not-allowed hover:from-purple-700 hover:to-pink-700 transition-all"
+              >
+                Join Room {!username ? '(Enter Username)' : !roomId ? '(Enter Room ID)' : ''}
+              </button>
+              
+              <p className="text-gray-400 text-xs text-center">
+                Camera permissions are optional - you can enable video after joining
+              </p>
+            </div>
           </div>
         </div>
       </div>
