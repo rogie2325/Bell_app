@@ -688,7 +688,16 @@ const BellApp = () => {
   };
 
   const joinRoom = async () => {
-    if (!username || !roomId) return;
+    console.log('🔴 JOIN ROOM CLICKED!');
+    console.log('📝 Username:', username);
+    console.log('📝 Room ID:', roomId);
+    console.log('👤 Current User:', currentUser);
+    
+    if (!username || !roomId) {
+      console.log('❌ Missing username or roomId');
+      setError('Please enter both username and room ID');
+      return;
+    }
     
     try {
       console.log('🏠 Joining room:', roomId);
@@ -714,39 +723,62 @@ const BellApp = () => {
         const ws = new WebSocket('wss://socketsbay.com/wss/v2/2/demo/');
         
         await new Promise((resolve, reject) => {
+          const timeout = setTimeout(() => {
+            reject(new Error('WebSocket connection timeout'));
+          }, 10000);
+          
           ws.onopen = () => {
+            clearTimeout(timeout);
             console.log('✅ WebSocket connected for room join');
             setIsConnected(true);
             resolve();
           };
-          ws.onerror = reject;
-          ws.onclose = () => setIsConnected(false);
+          
+          ws.onerror = (error) => {
+            clearTimeout(timeout);
+            console.error('❌ WebSocket connection error:', error);
+            reject(error);
+          };
+          
+          ws.onclose = () => {
+            console.log('🔌 WebSocket closed');
+            setIsConnected(false);
+          };
+          
+          ws.onmessage = (event) => {
+            console.log('📨 WebSocket message received:', event.data);
+          };
         });
         
         socketRef.current = ws;
       }
       
+      console.log('🎥 Requesting camera permissions...');
       await requestCameraPermissions();
       
       // Send join room message to other users
       if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
-        socketRef.current.send(JSON.stringify({
+        const joinMessage = {
           type: 'join-room',
           roomId: roomId,
           user: userToUse,
           category: roomCategory,
           timestamp: new Date().toISOString()
-        }));
+        };
+        
+        console.log('📤 Sending join message:', joinMessage);
+        socketRef.current.send(JSON.stringify(joinMessage));
         
         setCurrentRoom(roomId);
         setIsConnected(true);
-        console.log('✅ Room join request sent');
+        console.log('✅ Room join request sent successfully');
       } else {
+        console.log('❌ WebSocket not ready');
         setError('Not connected to server. Please try again.');
       }
     } catch (error) {
-      console.error('Failed to join room:', error);
-      setError('Failed to join room. Please check your camera/microphone permissions.');
+      console.error('💥 Failed to join room:', error);
+      setError(`Failed to join room: ${error.message}. Please check your camera/microphone permissions.`);
     }
   };
 
@@ -1076,12 +1108,25 @@ const BellApp = () => {
               />
             </div>
             
+            {error && (
+              <div className="bg-red-600/20 border border-red-500 rounded-lg p-3">
+                <p className="text-red-300 text-sm">{error}</p>
+              </div>
+            )}
+            
             <button
-              onClick={joinRoom}
-              disabled={!roomId}
+              onClick={(e) => {
+                e.preventDefault();
+                setError(''); // Clear previous errors
+                console.log('🔴 BUTTON CLICKED! Event:', e);
+                console.log('📝 Username value:', username);
+                console.log('📝 RoomId value:', roomId);
+                joinRoom();
+              }}
+              disabled={!roomId || !username}
               className="w-full py-4 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg font-semibold disabled:opacity-50 disabled:cursor-not-allowed hover:from-purple-700 hover:to-pink-700 transition-all"
             >
-              Join Room
+              Join Room {!username ? '(Enter Username)' : !roomId ? '(Enter Room ID)' : ''}
             </button>
           </div>
         </div>
