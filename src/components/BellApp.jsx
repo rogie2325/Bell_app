@@ -28,6 +28,10 @@ const BellApp = () => {
   // PWA Install functionality
   const [deferredPrompt, setDeferredPrompt] = useState(null);
   
+  // Real multi-user functionality
+  const [remoteStreams, setRemoteStreams] = useState(new Map());
+  const [currentUser, setCurrentUser] = useState(null);
+  
   const localVideoRef = useRef(null);
   const localStreamRef = useRef(null);
   const screenStreamRef = useRef(null);
@@ -113,21 +117,83 @@ const BellApp = () => {
     }
   };
 
-  // Demo mode - WebSocket connection simulation
+  // Real WebSocket connection for multi-user functionality
   useEffect(() => {
-    if (isAuthenticated) {
-      // Mock socket connection for demo
-      socketRef.current = {
-        send: (data) => {
-          console.log('Demo: Sending message', JSON.parse(data));
-        },
-        close: () => {
-          console.log('Demo: Socket closed');
+    if (isAuthenticated && currentUser) {
+      console.log('🔌 Connecting to WebSocket server...');
+      
+      // Connect to a free WebSocket service for demo
+      const ws = new WebSocket('wss://socketsbay.com/wss/v2/2/demo/');
+      
+      ws.onopen = () => {
+        console.log('✅ WebSocket connected');
+        setIsConnected(true);
+        
+        // Send user joined message
+        ws.send(JSON.stringify({
+          type: 'user-joined',
+          user: currentUser,
+          timestamp: new Date().toISOString()
+        }));
+      };
+      
+      ws.onmessage = async (event) => {
+        try {
+          const message = JSON.parse(event.data);
+          console.log('📨 Received message:', message);
+          
+          switch (message.type) {
+            case 'user-joined':
+              handleUserJoined(message);
+              break;
+            case 'user-left':
+              handleUserLeft(message);
+              break;
+            case 'offer':
+              handleOffer(message);
+              break;
+            case 'answer':
+              handleAnswer(message);
+              break;
+            case 'ice-candidate':
+              handleIceCandidate(message);
+              break;
+            case 'chat-message':
+              handleChatMessage(message);
+              break;
+            case 'room-joined':
+              handleRoomJoined(message);
+              break;
+          }
+        } catch (error) {
+          console.error('Error parsing message:', error);
         }
       };
-      console.log('Demo: Connected to mock server');
+      
+      ws.onclose = () => {
+        console.log('❌ WebSocket disconnected');
+        setIsConnected(false);
+      };
+      
+      ws.onerror = (error) => {
+        console.error('WebSocket error:', error);
+        setError('Connection failed. Please try again.');
+      };
+      
+      socketRef.current = ws;
+      
+      return () => {
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({
+            type: 'user-left',
+            user: currentUser,
+            timestamp: new Date().toISOString()
+          }));
+        }
+        ws.close();
+      };
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, currentUser]);
 
   // Camera initialization - separate useEffect to ensure function is defined
   useEffect(() => {
@@ -325,13 +391,26 @@ const BellApp = () => {
 
   const login = async () => {
     try {
-      // Demo login - no backend required
+      // Demo login - enhanced for multi-user
       if (email && password) {
         const mockToken = 'demo_token_' + Date.now();
         localStorage.setItem('bell_token', mockToken);
+        
+        // Create user object for multi-user functionality
+        const user = {
+          id: Date.now().toString(),
+          username: email.split('@')[0] || 'User',
+          email: email,
+          avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${email}`,
+          joinedAt: new Date().toISOString()
+        };
+        
+        setCurrentUser(user);
         setIsAuthenticated(true);
-        setUsername(email.split('@')[0] || 'User'); // Use email prefix as username
+        setUsername(user.username);
         setError('');
+        
+        console.log('👤 User logged in:', user);
       } else {
         setError('Please enter email and password');
       }
@@ -342,13 +421,29 @@ const BellApp = () => {
 
   const register = async () => {
     try {
-      // Demo registration - no backend required
+      // Demo registration - enhanced for multi-user
       if (username && email && password) {
         if (password.length < 6) {
           setError('Password must be at least 6 characters long');
           return;
         }
         const mockToken = 'demo_token_' + Date.now();
+        localStorage.setItem('bell_token', mockToken);
+        
+        // Create user object for multi-user functionality
+        const user = {
+          id: Date.now().toString(),
+          username: username,
+          email: email,
+          avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${username}`,
+          joinedAt: new Date().toISOString()
+        };
+        
+        setCurrentUser(user);
+        setIsAuthenticated(true);
+        setError('');
+        
+        console.log('👤 User registered:', user);
         localStorage.setItem('bell_token', mockToken);
         setIsAuthenticated(true);
         setError('');
@@ -525,27 +620,31 @@ const BellApp = () => {
   };
 
   const joinRoom = async () => {
-    if (!username || !roomId) return;
+    if (!username || !roomId || !currentUser) return;
     
-    await startLocalVideo();
-    
-    // Demo mode - simulate successful room join
-    setTimeout(() => {
-      setIsConnected(true);
-      setCurrentRoom(roomId);
-      // Add some mock participants for demo
-      setParticipants([
-        { id: 'demo1', name: 'Demo User 1', video: true, audio: true, screenSharing: false },
-        { id: 'demo2', name: 'Demo User 2', video: false, audio: true, screenSharing: false }
-      ]);
-    }, 1000);
-    
-    socketRef.current.send(JSON.stringify({
-      type: 'join-room',
-      roomId: roomId,
-      username: username,
-      category: roomCategory
-    }));
+    try {
+      console.log('🏠 Joining room:', roomId);
+      await requestCameraPermissions();
+      
+      // Send join room message to other users
+      if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
+        socketRef.current.send(JSON.stringify({
+          type: 'join-room',
+          roomId: roomId,
+          user: currentUser,
+          category: roomCategory,
+          timestamp: new Date().toISOString()
+        }));
+        
+        setCurrentRoom(roomId);
+        console.log('✅ Room join request sent');
+      } else {
+        setError('Not connected to server. Please try again.');
+      }
+    } catch (error) {
+      console.error('Failed to join room:', error);
+      setError('Failed to join room. Please check your camera/microphone permissions.');
+    }
   };
 
   const leaveRoom = () => {
@@ -606,23 +705,29 @@ const BellApp = () => {
   };
 
   const sendMessage = () => {
-    if (!newMessage.trim()) return;
+    if (!newMessage.trim() || !currentUser) return;
     
     const message = {
       id: Date.now(),
-      user: username,
+      username: currentUser.username,
       text: newMessage,
-      timestamp: new Date().toLocaleTimeString()
+      timestamp: new Date().toLocaleTimeString(),
+      avatar: currentUser.avatar
     };
     
-    // Demo mode - add message directly to state
+    // Add message to local state immediately
     setMessages(prev => [...prev, message]);
     
-    socketRef.current.send(JSON.stringify({
-      type: 'chat-message',
-      roomId: currentRoom,
-      message: newMessage
-    }));
+    // Send to other users via WebSocket
+    if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
+      socketRef.current.send(JSON.stringify({
+        type: 'chat-message',
+        roomId: currentRoom,
+        text: newMessage,
+        fromUser: currentUser,
+        timestamp: new Date().toISOString()
+      }));
+    }
     
     setNewMessage('');
   };
@@ -1018,43 +1123,49 @@ const BellApp = () => {
               </div>
             </div>
 
-            {/* Remote Videos */}
-            {participants.map((participant, index) => (
-              <div key={participant.id} className="relative bg-gray-800 rounded-lg overflow-hidden aspect-video">
-                <video
-                  id={`video-${participant.id}`}
-                  autoPlay
-                  playsInline
-                  className="w-full h-full object-cover"
-                />
-                <div className="w-full h-full flex items-center justify-center">
-                  <div className="text-4xl lg:text-6xl">
-                    {participant.video ? '🎥' : '👤'}
+            {/* Remote Videos - Real WebRTC participants */}
+            {Array.from(remoteStreams.entries()).map(([userId, stream]) => {
+              const participant = participants.find(p => p.id === userId);
+              return (
+                <div key={userId} className="relative bg-gray-800 rounded-lg overflow-hidden aspect-video">
+                  <video
+                    ref={(video) => {
+                      if (video && stream) {
+                        video.srcObject = stream;
+                      }
+                    }}
+                    autoPlay
+                    playsInline
+                    className="w-full h-full object-cover"
+                  />
+                  <div className="absolute bottom-2 left-2 bg-black/50 text-white px-2 py-1 rounded text-xs lg:text-sm">
+                    {participant?.username || 'Remote User'}
                   </div>
-                </div>
-                <div className="absolute bottom-2 left-2 bg-black/50 text-white px-2 py-1 rounded text-xs lg:text-sm">
-                  {participant.name}
-                </div>
-                <div className="absolute top-2 right-2 flex space-x-1">
-                  {participant.screenSharing && (
+                  <div className="absolute top-2 right-2 flex space-x-1">
                     <div className="bg-green-600 p-1 rounded">
-                      <Monitor className="h-3 w-3 text-white" />
+                      <Video className="h-3 w-3 text-white" />
+                    </div>
+                  </div>
+                  {participant?.avatar && (
+                    <div className="absolute top-2 left-2 w-8 h-8 rounded-full overflow-hidden">
+                      <img src={participant.avatar} alt={participant.username} className="w-full h-full object-cover" />
                     </div>
                   )}
-                  {!participant.video && (
-                    <div className="bg-red-600 p-1 rounded">
-                      <VideoOff className="h-3 w-3 text-white" />
-                    </div>
-                  )}
-                  {!participant.audio && (
-                    <div className="bg-red-600 p-1 rounded">
-                      <MicOff className="h-3 w-3 text-white" />
-                    </div>
-                  )}
+                </div>
+              );
+            })}
+
+            {/* Waiting message when no participants */}
+            {remoteStreams.size === 0 && (
+              <div className="col-span-full flex items-center justify-center h-64 text-gray-400">
+                <div className="text-center">
+                  <Users className="h-12 w-12 mx-auto mb-2 opacity-50" />
+                  <p>Waiting for other participants to join...</p>
+                  <p className="text-sm mt-1">Share room ID: <span className="font-mono font-bold text-white">{currentRoom}</span></p>
                 </div>
               </div>
-            ))}
-
+            )}
+            
             {/* Empty Slots */}
             {Array.from({ length: Math.max(0, 8 - participants.length - 1) }).map((_, index) => (
               <div key={`empty-${index}`} className="bg-gray-800/50 rounded-lg border-2 border-dashed border-gray-600 flex items-center justify-center aspect-video">
@@ -1078,12 +1189,21 @@ const BellApp = () => {
           
           <div className="flex-1 overflow-y-auto p-4 space-y-3">
             {messages.map(message => (
-              <div key={message.id} className="text-sm">
-                <div className="text-gray-400 mb-1">
-                  <span className="font-medium text-white">{message.user}</span>
-                  <span className="ml-2 text-xs">{message.timestamp}</span>
+              <div key={message.id} className="flex items-start space-x-3 text-sm">
+                {message.avatar && (
+                  <img 
+                    src={message.avatar} 
+                    alt={message.username}
+                    className="w-8 h-8 rounded-full"
+                  />
+                )}
+                <div className="flex-1">
+                  <div className="text-gray-400 mb-1">
+                    <span className="font-medium text-white">{message.username}</span>
+                    <span className="ml-2 text-xs">{message.timestamp}</span>
+                  </div>
+                  <div className="text-gray-300">{message.text}</div>
                 </div>
-                <div className="text-gray-300">{message.text}</div>
               </div>
             ))}
             {messages.length === 0 && (
