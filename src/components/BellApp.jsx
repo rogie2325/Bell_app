@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   Camera, Mic, MicOff, Video, VideoOff, Phone, Users, MessageCircle, 
-  Settings, Monitor, MonitorOff, Send, Menu, X, LogOut, UserPlus, Download 
+  Settings, Monitor, MonitorOff, Send, Menu, X, LogOut, UserPlus, Download,
+  Share2, Copy, Link
 } from 'lucide-react';
 
 const BellApp = () => {
@@ -24,6 +25,8 @@ const BellApp = () => {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [showInstallPrompt, setShowInstallPrompt] = useState(false);
+  const [showInviteModal, setShowInviteModal] = useState(false);
+  const [inviteLinkCopied, setInviteLinkCopied] = useState(false);
   
   // PWA Install functionality
   const [deferredPrompt, setDeferredPrompt] = useState(null);
@@ -44,6 +47,71 @@ const BellApp = () => {
   };
 
   useEffect(scrollToBottom, [messages]);
+
+  // Generate invite link
+  const generateInviteLink = () => {
+    const baseUrl = window.location.origin;
+    return `${baseUrl}?room=${encodeURIComponent(roomId)}&user=${encodeURIComponent(username)}`;
+  };
+
+  // Copy invite link to clipboard
+  const copyInviteLink = async () => {
+    try {
+      const inviteLink = generateInviteLink();
+      await navigator.clipboard.writeText(inviteLink);
+      setInviteLinkCopied(true);
+      setTimeout(() => setInviteLinkCopied(false), 3000);
+    } catch (err) {
+      console.error('Failed to copy invite link:', err);
+      // Fallback for older browsers
+      const inviteLink = generateInviteLink();
+      const textArea = document.createElement('textarea');
+      textArea.value = inviteLink;
+      document.body.appendChild(textArea);
+      textArea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textArea);
+      setInviteLinkCopied(true);
+      setTimeout(() => setInviteLinkCopied(false), 3000);
+    }
+  };
+
+  // Share invite link (native sharing or fallback)
+  const shareInviteLink = async () => {
+    const inviteLink = generateInviteLink();
+    const shareText = `Join my video call on Bell!\n\nRoom: ${roomId}\nClick here: ${inviteLink}`;
+
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: 'Join my Bell video call',
+          text: `Join "${roomId}" on Bell`,
+          url: inviteLink,
+        });
+      } catch (err) {
+        console.log('Native sharing cancelled or failed');
+        copyInviteLink();
+      }
+    } else {
+      copyInviteLink();
+    }
+  };
+
+  // Check for room parameter in URL on app load
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const roomParam = urlParams.get('room');
+    const userParam = urlParams.get('user');
+    
+    if (roomParam) {
+      setRoomId(roomParam);
+      if (userParam) {
+        setUsername(userParam);
+      }
+      // Clean up URL
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+  }, []);
 
   // PWA Install functionality
   useEffect(() => {
@@ -1034,6 +1102,13 @@ const BellApp = () => {
             <span className="text-sm">{participants.length + 1}/8</span>
           </div>
           <button
+            onClick={() => setShowInviteModal(true)}
+            className="p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg transition-colors"
+            title="Invite others"
+          >
+            <UserPlus className="h-4 w-4" />
+          </button>
+          <button
             onClick={logout}
             className="p-2 text-gray-400 hover:text-white"
           >
@@ -1058,21 +1133,31 @@ const BellApp = () => {
                 <X className="h-5 w-5 text-gray-400" />
               </button>
             </div>
-            <div className="space-y-4">
-              <div className="flex items-center space-x-2 text-gray-400">
-                <Users className="h-4 w-4" />
-                <span className="text-sm">{participants.length + 1}/8 participants</span>
-              </div>
-              <button
-                onClick={() => {
-                  logout();
-                  setIsMobileMenuOpen(false);
-                }}
-                className="w-full flex items-center space-x-2 p-3 text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg"
-              >
-                <LogOut className="h-4 w-4" />
-                <span>Logout</span>
-              </button>
+              <div className="space-y-4">
+                <div className="flex items-center space-x-2 text-gray-400">
+                  <Users className="h-4 w-4" />
+                  <span className="text-sm">{participants.length + 1}/8 participants</span>
+                </div>
+                <button
+                  onClick={() => {
+                    setShowInviteModal(true);
+                    setIsMobileMenuOpen(false);
+                  }}
+                  className="w-full flex items-center space-x-2 p-3 text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg"
+                >
+                  <UserPlus className="h-4 w-4" />
+                  <span>Invite Others</span>
+                </button>
+                <button
+                  onClick={() => {
+                    logout();
+                    setIsMobileMenuOpen(false);
+                  }}
+                  className="w-full flex items-center space-x-2 p-3 text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg"
+                >
+                  <LogOut className="h-4 w-4" />
+                  <span>Logout</span>
+                </button>
               <button
                 onClick={() => {
                   leaveRoom();
@@ -1339,6 +1424,90 @@ const BellApp = () => {
           </button>
         </div>
       </div>
+
+      {/* Invite Modal */}
+      {showInviteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setShowInviteModal(false)}>
+          <div className="bg-gray-800 p-6 rounded-lg w-full max-w-md mx-4" onClick={e => e.stopPropagation()}>
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-white font-semibold text-lg">Invite Others to Join</h3>
+              <button onClick={() => setShowInviteModal(false)}>
+                <X className="h-5 w-5 text-gray-400 hover:text-white" />
+              </button>
+            </div>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-gray-300 text-sm mb-2">Room Code</label>
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="text"
+                    value={roomId}
+                    readOnly
+                    className="flex-1 bg-gray-700 text-white p-3 rounded-lg border border-gray-600"
+                  />
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(roomId);
+                      alert('Room code copied!');
+                    }}
+                    className="p-3 bg-blue-600 hover:bg-blue-700 rounded-lg"
+                  >
+                    <Copy className="h-4 w-4 text-white" />
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-gray-300 text-sm mb-2">Direct Join Link</label>
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="text"
+                    value={generateInviteLink()}
+                    readOnly
+                    className="flex-1 bg-gray-700 text-white p-3 rounded-lg border border-gray-600 text-xs"
+                  />
+                  <button
+                    onClick={copyInviteLink}
+                    className={`p-3 rounded-lg transition-colors ${
+                      inviteLinkCopied 
+                        ? 'bg-green-600 hover:bg-green-700' 
+                        : 'bg-blue-600 hover:bg-blue-700'
+                    }`}
+                  >
+                    {inviteLinkCopied ? (
+                      <span className="text-white text-xs px-2">✓</span>
+                    ) : (
+                      <Copy className="h-4 w-4 text-white" />
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex space-x-2">
+                <button
+                  onClick={shareInviteLink}
+                  className="flex-1 bg-green-600 hover:bg-green-700 text-white p-3 rounded-lg flex items-center justify-center space-x-2"
+                >
+                  <Share2 className="h-4 w-4" />
+                  <span>Share Link</span>
+                </button>
+                <button
+                  onClick={copyInviteLink}
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white p-3 rounded-lg flex items-center justify-center space-x-2"
+                >
+                  <Link className="h-4 w-4" />
+                  <span>Copy Link</span>
+                </button>
+              </div>
+
+              <div className="text-gray-400 text-xs text-center">
+                Share this link or room code with others to invite them to your call
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
