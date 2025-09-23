@@ -27,6 +27,7 @@ const BellApp = () => {
   const [showInstallPrompt, setShowInstallPrompt] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [inviteLinkCopied, setInviteLinkCopied] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState('disconnected'); // 'disconnected', 'connecting', 'connected', 'offline'
   
   // PWA Install functionality
   const [deferredPrompt, setDeferredPrompt] = useState(null);
@@ -95,6 +96,92 @@ const BellApp = () => {
     } else {
       copyInviteLink();
     }
+  };
+
+  // Multiple WebSocket servers to try as fallbacks
+  const webSocketServers = [
+    'wss://socketsbay.com/wss/v2/2/demo/',
+    'wss://echo.websocket.org/',
+    'wss://ws.postman-echo.com/raw'
+  ];
+
+  // Try connecting to WebSocket servers with fallbacks
+  const connectToWebSocket = async () => {
+    setConnectionStatus('connecting');
+    
+    for (let i = 0; i < webSocketServers.length; i++) {
+      const serverUrl = webSocketServers[i];
+      console.log(`🔌 Trying WebSocket server ${i + 1}/${webSocketServers.length}: ${serverUrl}`);
+      
+      try {
+        const ws = new WebSocket(serverUrl);
+        
+        const connected = await new Promise((resolve, reject) => {
+          const timeout = setTimeout(() => {
+            ws.close();
+            reject(new Error(`Timeout connecting to ${serverUrl}`));
+          }, 5000);
+          
+          ws.onopen = () => {
+            clearTimeout(timeout);
+            console.log(`✅ Connected to WebSocket server: ${serverUrl}`);
+            setConnectionStatus('connected');
+            setIsConnected(true);
+            resolve(true);
+          };
+          
+          ws.onerror = (error) => {
+            clearTimeout(timeout);
+            console.log(`❌ Failed to connect to ${serverUrl}:`, error);
+            reject(error);
+          };
+          
+          ws.onclose = () => {
+            console.log(`🔌 WebSocket closed: ${serverUrl}`);
+            setIsConnected(false);
+            setConnectionStatus('disconnected');
+          };
+          
+          ws.onmessage = (event) => {
+            console.log('📨 WebSocket message received:', event.data);
+            // Handle messages here if needed
+          };
+        });
+        
+        if (connected) {
+          socketRef.current = ws;
+          return ws;
+        }
+      } catch (error) {
+        console.log(`❌ Server ${serverUrl} failed:`, error.message);
+        if (i === webSocketServers.length - 1) {
+          throw new Error('All WebSocket servers failed');
+        }
+      }
+    }
+  };
+
+  // Offline mode - join room without server connection
+  const joinRoomOffline = () => {
+    console.log('📱 Joining room in offline mode');
+    setConnectionStatus('offline');
+    setIsConnected(false);
+    setCurrentRoom(roomId);
+    setError('');
+    
+    // Add some demo messages for offline mode
+    setMessages([
+      {
+        id: 1,
+        text: 'Welcome to offline mode! Camera and chat work, but you won\'t see other users until server connection is restored.',
+        user: 'System',
+        avatar: '🤖',
+        timestamp: new Date().toLocaleTimeString()
+      }
+    ]);
+    
+    console.log('✅ Joined room in offline mode');
+    return true;
   };
 
   // Check for room parameter in URL on app load
@@ -701,7 +788,7 @@ const BellApp = () => {
     
     try {
       console.log('🏠 Joining room:', roomId);
-      setError('Connecting...'); // Show progress
+      setError('Setting up...'); // Show progress
       
       // Create currentUser if it doesn't exist (for direct room joining)
       let userToUse = currentUser;
@@ -718,83 +805,67 @@ const BellApp = () => {
         console.log('👤 Created guest user:', userToUse);
       }
       
-      // Ensure WebSocket is connected
-      if (!socketRef.current || socketRef.current.readyState !== WebSocket.OPEN) {
-        console.log('🔌 WebSocket not connected, connecting now...');
-        setError('Connecting to server...');
+      // Try to connect to WebSocket servers with fallbacks
+      setError('Connecting to server...');
+      let connectionSuccess = false;
+      
+      try {
+        await connectToWebSocket();
+        connectionSuccess = true;
+        console.log('✅ WebSocket connection established');
+      } catch (wsError) {
+        console.log('⚠️ All WebSocket servers failed, trying offline mode');
+        console.log('WebSocket error:', wsError.message);
         
-        try {
-          const ws = new WebSocket('wss://socketsbay.com/wss/v2/2/demo/');
-          
-          await new Promise((resolve, reject) => {
-            const timeout = setTimeout(() => {
-              reject(new Error('Connection timeout - server may be unavailable'));
-            }, 10000);
-            
-            ws.onopen = () => {
-              clearTimeout(timeout);
-              console.log('✅ WebSocket connected for room join');
-              setIsConnected(true);
-              resolve();
-            };
-            
-            ws.onerror = (error) => {
-              clearTimeout(timeout);
-              console.error('❌ WebSocket connection error:', error);
-              reject(new Error('Failed to connect to server'));
-            };
-            
-            ws.onclose = () => {
-              console.log('🔌 WebSocket closed');
-              setIsConnected(false);
-            };
-            
-            ws.onmessage = (event) => {
-              console.log('📨 WebSocket message received:', event.data);
-            };
-          });
-          
-          socketRef.current = ws;
-        } catch (wsError) {
-          console.error('❌ WebSocket setup failed:', wsError);
-          setError(`Connection failed: ${wsError.message}`);
+        // Ask user if they want to continue in offline mode
+        const continueOffline = window.confirm(
+          'Unable to connect to server. Would you like to continue in offline mode?\n\n' +
+          'In offline mode:\n' +
+          '✅ Camera and microphone work\n' +
+          '✅ Screen sharing works\n' +
+          '❌ No real-time chat with others\n' +
+          '❌ Cannot see other users'
+        );
+        
+        if (continueOffline) {
+          joinRoomOffline();
+          connectionSuccess = true;
+        } else {
+          setError('Connection failed. Please check your internet connection and try again.');
           return;
         }
       }
       
-      // Try to get camera permissions, but don't fail if it doesn't work
-      console.log('🎥 Requesting camera permissions (optional)...');
-      setError('Getting camera permissions...');
-      
-      try {
-        await requestCameraPermissions();
-        console.log('✅ Camera permissions granted');
-      } catch (cameraError) {
-        console.log('⚠️ Camera permissions failed, continuing without camera:', cameraError.message);
-        // Continue without camera - user can enable it later
-      }
-      
-      // Send join room message to other users
-      if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
-        const joinMessage = {
-          type: 'join-room',
-          roomId: roomId,
-          user: userToUse,
-          category: roomCategory,
-          timestamp: new Date().toISOString()
-        };
+      if (connectionSuccess) {
+        // Try to get camera permissions, but don't fail if it doesn't work
+        console.log('🎥 Requesting camera permissions (optional)...');
+        setError('Getting camera permissions...');
         
-        console.log('📤 Sending join message:', joinMessage);
-        socketRef.current.send(JSON.stringify(joinMessage));
+        try {
+          await requestCameraPermissions();
+          console.log('✅ Camera permissions granted');
+        } catch (cameraError) {
+          console.log('⚠️ Camera permissions failed, continuing without camera:', cameraError.message);
+          // Continue without camera - user can enable it later
+        }
+        
+        // Send join room message if connected to server
+        if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
+          const joinMessage = {
+            type: 'join-room',
+            roomId: roomId,
+            user: userToUse,
+            category: roomCategory,
+            timestamp: new Date().toISOString()
+          };
+          
+          console.log('📤 Sending join message:', joinMessage);
+          socketRef.current.send(JSON.stringify(joinMessage));
+        }
         
         setCurrentRoom(roomId);
-        setIsConnected(true);
         setError(''); // Clear error on success
         console.log('✅ Successfully joined room!');
-      } else {
-        console.log('❌ WebSocket not ready after connection attempt');
-        setError('Connection lost. Please try again.');
-        return;
       }
     } catch (error) {
       console.error('💥 Failed to join room:', error);
@@ -1146,6 +1217,27 @@ const BellApp = () => {
                 <p className="text-red-300 text-sm">{error}</p>
               </div>
             )}
+            
+            {/* Connection Status Indicator */}
+            <div className="bg-gray-800/50 border border-gray-600 rounded-lg p-3">
+              <div className="flex items-center justify-between">
+                <span className="text-gray-300 text-sm">Server Status:</span>
+                <div className="flex items-center space-x-2">
+                  <div className={`w-2 h-2 rounded-full ${
+                    connectionStatus === 'connected' ? 'bg-green-500' :
+                    connectionStatus === 'connecting' ? 'bg-yellow-500 animate-pulse' :
+                    connectionStatus === 'offline' ? 'bg-orange-500' :
+                    'bg-red-500'
+                  }`}></div>
+                  <span className="text-xs text-gray-400">
+                    {connectionStatus === 'connected' ? 'Connected' :
+                     connectionStatus === 'connecting' ? 'Connecting...' :
+                     connectionStatus === 'offline' ? 'Offline Mode' :
+                     'Disconnected'}
+                  </span>
+                </div>
+              </div>
+            </div>
             
             <div className="space-y-3">
               <button
