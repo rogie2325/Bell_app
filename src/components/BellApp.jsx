@@ -688,10 +688,44 @@ const BellApp = () => {
   };
 
   const joinRoom = async () => {
-    if (!username || !roomId || !currentUser) return;
+    if (!username || !roomId) return;
     
     try {
       console.log('🏠 Joining room:', roomId);
+      
+      // Create currentUser if it doesn't exist (for direct room joining)
+      let userToUse = currentUser;
+      if (!currentUser) {
+        userToUse = {
+          id: Date.now().toString(),
+          username: username,
+          email: `${username}@guest.bell`,
+          avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${username}`,
+          joinedAt: new Date().toISOString()
+        };
+        setCurrentUser(userToUse);
+        setIsAuthenticated(true);
+        console.log('👤 Created guest user:', userToUse);
+      }
+      
+      // Ensure WebSocket is connected
+      if (!socketRef.current || socketRef.current.readyState !== WebSocket.OPEN) {
+        console.log('🔌 WebSocket not connected, connecting now...');
+        const ws = new WebSocket('wss://socketsbay.com/wss/v2/2/demo/');
+        
+        await new Promise((resolve, reject) => {
+          ws.onopen = () => {
+            console.log('✅ WebSocket connected for room join');
+            setIsConnected(true);
+            resolve();
+          };
+          ws.onerror = reject;
+          ws.onclose = () => setIsConnected(false);
+        });
+        
+        socketRef.current = ws;
+      }
+      
       await requestCameraPermissions();
       
       // Send join room message to other users
@@ -699,12 +733,13 @@ const BellApp = () => {
         socketRef.current.send(JSON.stringify({
           type: 'join-room',
           roomId: roomId,
-          user: currentUser,
+          user: userToUse,
           category: roomCategory,
           timestamp: new Date().toISOString()
         }));
         
         setCurrentRoom(roomId);
+        setIsConnected(true);
         console.log('✅ Room join request sent');
       } else {
         setError('Not connected to server. Please try again.');
