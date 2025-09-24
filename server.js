@@ -51,8 +51,13 @@ app.post('/api/token', (req, res) => {
 
     const token = at.toJwt();
     console.log('Token generated successfully for:', participantName);
+    console.log('Token type:', typeof token);
+    console.log('Token length:', token ? token.length : 'null/undefined');
     
-    res.json({ token });
+    const responseData = { token };
+    console.log('Response data:', JSON.stringify(responseData));
+    
+    res.json(responseData);
   } catch (error) {
     console.error('Error generating token:', error);
     res.status(500).json({ error: 'Failed to generate token', details: error.message });
