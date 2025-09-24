@@ -54,7 +54,7 @@ app.post('/api/token', (req, res) => {
 
     const token = at.toJwt();
     console.log('✅ Token generated for:', participantName);
-    console.log('🎫 Token preview:', token.substring(0, 50) + '...');
+    console.log('🎫 Token length:', token.length);
     
     res.json({ token });
   } catch (error) {
