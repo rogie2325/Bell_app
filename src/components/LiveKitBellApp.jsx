@@ -622,7 +622,7 @@ const LiveKitBellApp = () => {
     const hasVideo = isLocal ? localVideoTrack : videoTrack;
 
     return (
-      <div className="relative aspect-video bg-gray-900 rounded-lg overflow-hidden">
+      <div className="relative aspect-video bg-gray-900 rounded-lg overflow-hidden min-h-[200px]">
         {hasVideo ? (
           <video
             ref={isLocal ? localVideoRef : videoRef}
@@ -636,11 +636,15 @@ const LiveKitBellApp = () => {
             <div className="text-white text-center">
               <User className="w-12 h-12 mx-auto mb-2 opacity-50" />
               <p className="text-sm opacity-75">No video</p>
+              <p className="text-xs opacity-50 mt-1">
+                {participant?.identity || 'Unknown'}
+              </p>
             </div>
           </div>
         )}
         <div className="absolute bottom-2 left-2 bg-black bg-opacity-50 text-white px-2 py-1 rounded text-sm">
           {isLocal ? `${participant?.identity || username} (You)` : participant?.identity}
+          {hasVideo && <span className="ml-1 text-green-400">●</span>}
         </div>
       </div>
     );
@@ -741,8 +745,13 @@ const LiveKitBellApp = () => {
       </div>
 
       {/* Video Grid */}
-      <div className="flex-1 p-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 h-full">
+      <div className="flex-1 p-4 overflow-y-auto">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 min-h-full">
+          {/* Debug info for mobile */}
+          <div className="hidden">
+            Participants: {participants.size}, Local: {localParticipant ? 'yes' : 'no'}
+          </div>
+          
           {/* Local video */}
           <ParticipantVideo participant={localParticipant} isLocal={true} />
           
@@ -750,6 +759,15 @@ const LiveKitBellApp = () => {
           {Array.from(participants.values()).map((participant) => (
             <ParticipantVideo key={participant.sid} participant={participant} />
           ))}
+        </div>
+        
+        {/* Mobile debugging - show participant count */}
+        <div className="sm:hidden fixed top-20 left-4 bg-black bg-opacity-75 text-white px-3 py-2 rounded text-sm z-10">
+          <div>Total: {participants.size + 1}</div>
+          <div>Remote: {participants.size}</div>
+          <div className="text-xs opacity-75">
+            Grid: {participants.size + 1 === 1 ? '1x1' : participants.size + 1 === 2 ? '2x1' : '2x2'}
+          </div>
         </div>
       </div>
 
