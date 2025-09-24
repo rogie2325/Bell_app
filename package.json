@@ -9,6 +9,8 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "server": "node server.js",
+    "simple-server": "node simple-server.js",
+    "start": "node simple-server.js",
     "dev:full": "concurrently \"npm run server\" \"npm run dev\"",
     "setup": "node setup-livekit.js",
     "test:livekit": "node test-livekit.js"
