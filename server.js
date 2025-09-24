@@ -12,7 +12,8 @@ app.use(cors({
     'http://localhost:5173',
     'http://localhost:3000', 
     'https://bell-app.vercel.app',
-    'https://bell-app-*.vercel.app'
+    /https:\/\/.*\.vercel\.app$/,  // Allow all vercel.app subdomains
+    /https:\/\/bell-app-.*\.vercel\.app$/,  // Specific pattern for your app
   ],
   credentials: true,
   methods: ['GET', 'POST', 'OPTIONS'],
