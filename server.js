@@ -20,7 +20,7 @@ const LIVEKIT_API_KEY = process.env.LIVEKIT_API_KEY || 'your-api-key';
 const LIVEKIT_SECRET = process.env.LIVEKIT_API_SECRET || process.env.LIVEKIT_SECRET || 'your-secret';
 
 // Generate access token endpoint
-app.post('/api/token', (req, res) => {
+app.post('/api/token', async (req, res) => {
   console.log('Token request received:', req.body);
   const { roomName, participantName } = req.body;
 
@@ -49,13 +49,28 @@ app.post('/api/token', (req, res) => {
       canPublishData: true,
     });
 
-    const token = at.toJwt();
+    // Generate the JWT token - handle both sync and async cases
+    let token = at.toJwt();
+    
+    // If it's a Promise, await it
+    if (token && typeof token.then === 'function') {
+      token = await token;
+    }
+    
     console.log('Token generated successfully for:', participantName);
     console.log('Token type:', typeof token);
     console.log('Token length:', token ? token.length : 'null/undefined');
+    console.log('Token preview:', token ? token.substring(0, 50) + '...' : 'null/undefined');
+    
+    // Ensure token is a string
+    if (typeof token !== 'string') {
+      console.error('Token is not a string:', typeof token, token);
+      return res.status(500).json({ error: 'Token generation failed - invalid token type' });
+    }
     
     const responseData = { token };
-    console.log('Response data:', JSON.stringify(responseData));
+    console.log('Response data type:', typeof responseData.token);
+    console.log('Response JSON:', JSON.stringify(responseData));
     
     res.json(responseData);
   } catch (error) {
