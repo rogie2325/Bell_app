@@ -60,6 +60,9 @@ const LiveKitBellApp = () => {
 
   // Generate access token by calling backend API
   const generateAccessToken = async (roomName, participantName) => {
+    console.log('🔑 Generating token for:', { roomName, participantName });
+    console.log('🌐 Backend URL:', BACKEND_URL);
+    
     try {
       const response = await fetch(`${BACKEND_URL}/api/token`, {
         method: 'POST',
@@ -72,15 +75,26 @@ const LiveKitBellApp = () => {
         }),
       });
 
+      console.log('📡 Response status:', response.status);
+      console.log('📡 Response ok:', response.ok);
+
       if (!response.ok) {
-        throw new Error(`Failed to generate token: ${response.statusText}`);
+        const errorText = await response.text();
+        console.error('❌ Backend error response:', errorText);
+        throw new Error(`Failed to generate token: ${response.status} - ${errorText}`);
       }
 
-      const { token } = await response.json();
-      return token;
+      const data = await response.json();
+      console.log('✅ Token generated successfully');
+      return data.token;
     } catch (error) {
-      console.error('Token generation error:', error);
-      throw error;
+      console.error('❌ Token generation error:', error);
+      console.error('❌ Error details:', {
+        message: error.message,
+        name: error.name,
+        stack: error.stack
+      });
+      throw new Error(`Token generation failed: ${error.message}`);
     }
   };
 
