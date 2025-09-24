@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   Camera, Mic, MicOff, Video, VideoOff, Phone, Users, MessageCircle, 
   Settings, Monitor, MonitorOff, Send, Menu, X, LogOut, UserPlus, Download,
-  Share2, Copy, Link, PhoneOff, User
+  Share2, Copy, Link, PhoneOff, User, RotateCcw
 } from 'lucide-react';
 import {
   Room,
@@ -33,6 +33,7 @@ const LiveKitBellApp = () => {
   const [isVideoEnabled, setIsVideoEnabled] = useState(true);
   const [isAudioEnabled, setIsAudioEnabled] = useState(true);
   const [isScreenSharing, setIsScreenSharing] = useState(false);
+  const [currentFacingMode, setCurrentFacingMode] = useState('user'); // 'user' for front, 'environment' for back
   const [connectionStatus, setConnectionStatus] = useState('disconnected');
   const [error, setError] = useState('');
   
@@ -244,8 +245,15 @@ const LiveKitBellApp = () => {
         // Force re-render of participant videos
         setParticipants(prev => new Map(prev));
       } else if (track.kind === Track.Kind.Audio) {
+        // Ensure remote audio is played
         const audioElement = track.attach();
-        audioElement.play();
+        if (audioElement) {
+          audioElement.autoplay = true;
+          audioElement.play().catch(error => {
+            console.log('Audio autoplay failed:', error);
+            // Add user interaction requirement notice
+          });
+        }
       }
     });
 
@@ -287,25 +295,53 @@ const LiveKitBellApp = () => {
   };
 
   // Enable camera
-  const enableCamera = async () => {
+  const enableCamera = async (facingMode = currentFacingMode) => {
     try {
+      // Stop existing video track if any
       if (localVideoTrack) {
-        await localVideoTrack.unmute();
-      } else {
-        const track = await createLocalVideoTrack();
-        await room?.localParticipant.publishTrack(track);
-        setLocalVideoTrack(track);
-        
-        // Attach to local video element
-        if (localVideoRef.current) {
-          track.attach(localVideoRef.current);
+        localVideoTrack.stop();
+        if (room?.localParticipant) {
+          await room.localParticipant.unpublishTrack(localVideoTrack);
         }
+        setLocalVideoTrack(null);
       }
+
+      // Create video track with mobile-friendly constraints
+      const videoConstraints = {
+        width: { ideal: 1280, max: 1920 },
+        height: { ideal: 720, max: 1080 },
+        frameRate: { ideal: 30, max: 60 },
+        facingMode: { ideal: facingMode } // This enables camera flip on mobile
+      };
+
+      const track = await createLocalVideoTrack({
+        video: videoConstraints
+      });
+
+      if (room?.localParticipant) {
+        await room.localParticipant.publishTrack(track);
+      }
+      
+      setLocalVideoTrack(track);
+      setCurrentFacingMode(facingMode);
+      
+      // Attach to local video element
+      if (localVideoRef.current) {
+        track.attach(localVideoRef.current);
+      }
+      
       setIsVideoEnabled(true);
     } catch (error) {
       console.error('Failed to enable camera:', error);
-      setError('Failed to enable camera');
+      setError(`Failed to enable camera: ${error.message}`);
     }
+  };
+
+  // Flip camera (mobile)
+  const flipCamera = async () => {
+    const newFacingMode = currentFacingMode === 'user' ? 'environment' : 'user';
+    console.log('Flipping camera from', currentFacingMode, 'to', newFacingMode);
+    await enableCamera(newFacingMode);
   };
 
   // Disable camera
@@ -326,14 +362,30 @@ const LiveKitBellApp = () => {
       if (localAudioTrack) {
         await localAudioTrack.unmute();
       } else {
-        const track = await createLocalAudioTrack();
-        await room?.localParticipant.publishTrack(track);
+        // Create audio track with mobile-optimized settings
+        const audioConstraints = {
+          sampleRate: 48000,
+          channelCount: 1,
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true
+        };
+
+        const track = await createLocalAudioTrack({
+          audio: audioConstraints
+        });
+
+        if (room?.localParticipant) {
+          await room.localParticipant.publishTrack(track);
+        }
+        
         setLocalAudioTrack(track);
       }
       setIsAudioEnabled(true);
+      console.log('✅ Audio enabled successfully');
     } catch (error) {
       console.error('Failed to enable microphone:', error);
-      setError('Failed to enable microphone');
+      setError(`Failed to enable microphone: ${error.message}`);
     }
   };
 
@@ -481,6 +533,7 @@ const LiveKitBellApp = () => {
     setIsVideoEnabled(true);
     setIsAudioEnabled(true);
     setIsScreenSharing(false);
+    setCurrentFacingMode('user');
   };
 
   // Render participant video
@@ -706,6 +759,7 @@ const LiveKitBellApp = () => {
             className={`p-3 rounded-full ${
               isAudioEnabled ? 'bg-gray-600 hover:bg-gray-500' : 'bg-red-600 hover:bg-red-500'
             }`}
+            title={isAudioEnabled ? 'Mute microphone' : 'Unmute microphone'}
           >
             {isAudioEnabled ? (
               <Mic className="w-5 h-5 text-white" />
@@ -719,6 +773,7 @@ const LiveKitBellApp = () => {
             className={`p-3 rounded-full ${
               isVideoEnabled ? 'bg-gray-600 hover:bg-gray-500' : 'bg-red-600 hover:bg-red-500'
             }`}
+            title={isVideoEnabled ? 'Turn off camera' : 'Turn on camera'}
           >
             {isVideoEnabled ? (
               <Camera className="w-5 h-5 text-white" />
@@ -727,11 +782,23 @@ const LiveKitBellApp = () => {
             )}
           </button>
 
+          {/* Camera flip button (mobile) */}
+          {isVideoEnabled && (
+            <button
+              onClick={flipCamera}
+              className="p-3 rounded-full bg-gray-600 hover:bg-gray-500"
+              title="Flip camera"
+            >
+              <RotateCcw className="w-5 h-5 text-white" />
+            </button>
+          )}
+
           <button
             onClick={toggleScreenShare}
             className={`p-3 rounded-full ${
               isScreenSharing ? 'bg-indigo-600 hover:bg-indigo-500' : 'bg-gray-600 hover:bg-gray-500'
             }`}
+            title={isScreenSharing ? 'Stop screen share' : 'Share screen'}
           >
             {isScreenSharing ? (
               <MonitorOff className="w-5 h-5 text-white" />
