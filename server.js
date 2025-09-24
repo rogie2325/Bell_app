@@ -120,6 +120,20 @@ app.get('/health', (req, res) => {
   res.json({ status: 'OK' });
 });
 
+// Debug endpoint to check environment variables (remove in production)
+app.get('/debug/config', (req, res) => {
+  res.json({
+    hasApiKey: !!LIVEKIT_API_KEY,
+    hasSecret: !!LIVEKIT_SECRET,
+    apiKeyLength: LIVEKIT_API_KEY?.length || 0,
+    secretLength: LIVEKIT_SECRET?.length || 0,
+    apiKeyPrefix: LIVEKIT_API_KEY?.substring(0, 10) || 'none',
+    secretPrefix: LIVEKIT_SECRET?.substring(0, 10) || 'none',
+    nodeEnv: process.env.NODE_ENV,
+    port: PORT
+  });
+});
+
 app.listen(PORT, () => {
   console.log(`🚀 LiveKit token server running on port ${PORT}`);
 });
