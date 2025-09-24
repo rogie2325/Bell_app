@@ -34,6 +34,7 @@ const LiveKitBellApp = () => {
   const [isAudioEnabled, setIsAudioEnabled] = useState(true);
   const [isScreenSharing, setIsScreenSharing] = useState(false);
   const [currentFacingMode, setCurrentFacingMode] = useState('user'); // 'user' for front, 'environment' for back
+  const [isChatOpen, setIsChatOpen] = useState(false); // Chat visibility state
   const [connectionStatus, setConnectionStatus] = useState('disconnected');
   const [error, setError] = useState('');
   
@@ -534,6 +535,7 @@ const LiveKitBellApp = () => {
     setIsAudioEnabled(true);
     setIsScreenSharing(false);
     setCurrentFacingMode('user');
+    setIsChatOpen(false);
   };
 
   // Render participant video
@@ -806,44 +808,66 @@ const LiveKitBellApp = () => {
               <Monitor className="w-5 h-5 text-white" />
             )}
           </button>
-        </div>
-      </div>
 
-      {/* Chat sidebar (simplified for this example) */}
-      <div className="fixed right-4 bottom-20 w-80 bg-white rounded-lg shadow-xl">
-        <div className="p-4 border-b">
-          <h3 className="font-semibold">Chat</h3>
-        </div>
-        <div className="h-64 overflow-y-auto p-4 space-y-2">
-          {messages.map((msg) => (
-            <div key={msg.id} className={`text-sm ${msg.isLocal ? 'text-right' : ''}`}>
-              <div className={`inline-block max-w-xs p-2 rounded ${
-                msg.isLocal ? 'bg-indigo-500 text-white' : 'bg-gray-200'
-              }`}>
-                {!msg.isLocal && <div className="font-semibold text-xs mb-1">{msg.user}</div>}
-                {msg.message}
-              </div>
-            </div>
-          ))}
-          <div ref={messagesEndRef} />
-        </div>
-        <div className="p-4 border-t flex space-x-2">
-          <input
-            type="text"
-            value={newMessage}
-            onChange={(e) => setNewMessage(e.target.value)}
-            onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
-            className="flex-1 px-3 py-2 border rounded-lg"
-            placeholder="Type a message..."
-          />
+          {/* Chat toggle button */}
           <button
-            onClick={sendMessage}
-            className="bg-indigo-600 text-white px-3 py-2 rounded-lg hover:bg-indigo-700"
+            onClick={() => setIsChatOpen(!isChatOpen)}
+            className={`p-3 rounded-full ${
+              isChatOpen ? 'bg-indigo-600 hover:bg-indigo-500' : 'bg-gray-600 hover:bg-gray-500'
+            }`}
+            title={isChatOpen ? 'Close chat' : 'Open chat'}
           >
-            <Send className="w-4 h-4" />
+            <MessageCircle className="w-5 h-5 text-white" />
           </button>
         </div>
       </div>
+
+      {/* Collapsible Chat - Only show when toggled */}
+      {isChatOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 md:relative md:bg-transparent">
+          <div className="fixed right-0 top-0 h-full w-full max-w-sm bg-white shadow-xl md:relative md:max-w-none md:w-80 md:rounded-lg md:right-4 md:bottom-4 md:h-96">
+            <div className="flex items-center justify-between p-4 border-b">
+              <h3 className="font-semibold">Chat</h3>
+              <button
+                onClick={() => setIsChatOpen(false)}
+                className="p-1 hover:bg-gray-100 rounded"
+                title="Close chat"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="h-64 md:h-48 overflow-y-auto p-4 space-y-2">
+              {messages.map((msg) => (
+                <div key={msg.id} className={`text-sm ${msg.isLocal ? 'text-right' : ''}`}>
+                  <div className={`inline-block max-w-xs p-2 rounded ${
+                    msg.isLocal ? 'bg-indigo-500 text-white' : 'bg-gray-200'
+                  }`}>
+                    {!msg.isLocal && <div className="font-semibold text-xs mb-1">{msg.user}</div>}
+                    {msg.message}
+                  </div>
+                </div>
+              ))}
+              <div ref={messagesEndRef} />
+            </div>
+            <div className="p-4 border-t flex space-x-2">
+              <input
+                type="text"
+                value={newMessage}
+                onChange={(e) => setNewMessage(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
+                className="flex-1 px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                placeholder="Type a message..."
+              />
+              <button
+                onClick={sendMessage}
+                className="bg-indigo-600 text-white px-3 py-2 rounded-lg hover:bg-indigo-700 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+              >
+                <Send className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
