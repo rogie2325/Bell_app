@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   Camera, Mic, MicOff, Video, VideoOff, Phone, Users, MessageCircle, 
   Settings, Monitor, MonitorOff, Send, Menu, X, LogOut, UserPlus, Download,
-  Share2, Copy, Link, PhoneOff
+  Share2, Copy, Link, PhoneOff, User
 } from 'lucide-react';
 import {
   Room,
@@ -135,7 +135,12 @@ const LiveKitBellApp = () => {
 
       // Generate access token
       console.log('🎫 Requesting token for connection...');
-      const token = await generateAccessToken(roomId, username);
+      
+      // Create unique participant identity to avoid conflicts
+      const uniqueIdentity = `${username}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      console.log('🆔 Unique identity:', uniqueIdentity);
+      
+      const token = await generateAccessToken(roomId, uniqueIdentity);
       console.log('🎫 Token received for connection:', typeof token);
       console.log('🎫 Token length:', token?.length);
       console.log('🎫 Token preview:', token ? token.substring(0, 100) + '...' : 'null/undefined');
@@ -170,6 +175,14 @@ const LiveKitBellApp = () => {
       setLocalParticipant(newRoom.localParticipant);
       setIsConnected(true);
       setConnectionStatus('connected');
+      
+      // Initialize existing participants
+      const existingParticipants = new Map();
+      newRoom.participants.forEach((participant) => {
+        existingParticipants.set(participant.sid, participant);
+        console.log('Existing participant found:', participant.identity);
+      });
+      setParticipants(existingParticipants);
 
       // Enable camera and microphone by default
       await enableCamera();
@@ -201,7 +214,11 @@ const LiveKitBellApp = () => {
 
     room.on(RoomEvent.ParticipantConnected, (participant) => {
       console.log('Participant connected:', participant.identity);
-      setParticipants(prev => new Map(prev.set(participant.sid, participant)));
+      setParticipants(prev => {
+        const newMap = new Map(prev);
+        newMap.set(participant.sid, participant);
+        return newMap;
+      });
     });
 
     room.on(RoomEvent.ParticipantDisconnected, (participant) => {
@@ -214,13 +231,22 @@ const LiveKitBellApp = () => {
     });
 
     room.on(RoomEvent.TrackSubscribed, (track, publication, participant) => {
+      console.log('Track subscribed:', track.kind, 'from', participant.identity);
       if (track.kind === Track.Kind.Video) {
-        const videoElement = track.attach();
-        // You can attach this to a video element in your UI
-        console.log('Video track subscribed:', participant.identity);
+        // Force re-render of participant videos
+        setParticipants(prev => new Map(prev));
       } else if (track.kind === Track.Kind.Audio) {
         const audioElement = track.attach();
         audioElement.play();
+      }
+    });
+
+    room.on(RoomEvent.TrackUnsubscribed, (track, publication, participant) => {
+      console.log('Track unsubscribed:', track.kind, 'from', participant.identity);
+      track.detach();
+      if (track.kind === Track.Kind.Video) {
+        // Force re-render of participant videos
+        setParticipants(prev => new Map(prev));
       }
     });
 
@@ -404,6 +430,25 @@ const LiveKitBellApp = () => {
 
   // Cleanup function
   const cleanup = () => {
+    // Clean up local tracks
+    if (localVideoTrack) {
+      localVideoTrack.stop();
+      localVideoTrack.detach();
+    }
+    if (localAudioTrack) {
+      localAudioTrack.stop();
+      localAudioTrack.detach();
+    }
+    
+    // Clean up remote participant tracks
+    participants.forEach((participant) => {
+      participant.tracks.forEach((publication) => {
+        if (publication.track) {
+          publication.track.detach();
+        }
+      });
+    });
+    
     setRoom(null);
     setLocalParticipant(null);
     setLocalVideoTrack(null);
@@ -422,38 +467,86 @@ const LiveKitBellApp = () => {
     const [videoTrack, setVideoTrack] = useState(null);
 
     useEffect(() => {
+      if (!participant) return;
+
       if (isLocal) {
-        // Local video is handled separately
+        // For local participant, use the track we manage separately
+        if (localVideoTrack && localVideoRef.current) {
+          localVideoTrack.attach(localVideoRef.current);
+        }
         return;
       }
 
+      // For remote participants
       const updateVideoTrack = () => {
         const track = participant.getTrack(Track.Source.Camera)?.track;
-        if (track && track !== videoTrack) {
+        console.log('Updating video track for', participant.identity, track ? 'found' : 'not found');
+        
+        if (track !== videoTrack) {
+          // Clean up previous track
+          if (videoTrack && videoRef.current) {
+            videoTrack.detach(videoRef.current);
+          }
+          
           setVideoTrack(track);
-          if (videoRef.current) {
+          
+          // Attach new track
+          if (track && videoRef.current) {
             track.attach(videoRef.current);
           }
         }
       };
 
+      // Initial track setup
       updateVideoTrack();
-      participant.on(ParticipantEvent.TrackSubscribed, updateVideoTrack);
+
+      // Listen for track changes
+      const handleTrackSubscribed = (track, publication, remoteParticipant) => {
+        if (remoteParticipant === participant && track.kind === Track.Kind.Video) {
+          updateVideoTrack();
+        }
+      };
+
+      const handleTrackUnsubscribed = (track, publication, remoteParticipant) => {
+        if (remoteParticipant === participant && track.kind === Track.Kind.Video) {
+          updateVideoTrack();
+        }
+      };
+
+      // Add event listeners
+      room?.on(RoomEvent.TrackSubscribed, handleTrackSubscribed);
+      room?.on(RoomEvent.TrackUnsubscribed, handleTrackUnsubscribed);
       
       return () => {
-        participant.off(ParticipantEvent.TrackSubscribed, updateVideoTrack);
+        // Cleanup
+        if (videoTrack && videoRef.current) {
+          videoTrack.detach(videoRef.current);
+        }
+        room?.off(RoomEvent.TrackSubscribed, handleTrackSubscribed);
+        room?.off(RoomEvent.TrackUnsubscribed, handleTrackUnsubscribed);
       };
-    }, [participant, videoTrack, isLocal]);
+    }, [participant, room, isLocal, localVideoTrack, videoTrack]);
+
+    const hasVideo = isLocal ? localVideoTrack : videoTrack;
 
     return (
       <div className="relative aspect-video bg-gray-900 rounded-lg overflow-hidden">
-        <video
-          ref={isLocal ? localVideoRef : videoRef}
-          autoPlay
-          playsInline
-          muted={isLocal}
-          className="w-full h-full object-cover"
-        />
+        {hasVideo ? (
+          <video
+            ref={isLocal ? localVideoRef : videoRef}
+            autoPlay
+            playsInline
+            muted={isLocal}
+            className="w-full h-full object-cover"
+          />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center">
+            <div className="text-white text-center">
+              <User className="w-12 h-12 mx-auto mb-2 opacity-50" />
+              <p className="text-sm opacity-75">No video</p>
+            </div>
+          </div>
+        )}
         <div className="absolute bottom-2 left-2 bg-black bg-opacity-50 text-white px-2 py-1 rounded text-sm">
           {isLocal ? `${participant?.identity || username} (You)` : participant?.identity}
         </div>
