@@ -6,15 +6,9 @@ import { AccessToken } from 'livekit-server-sdk';
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// Configure CORS for production
+// Configure CORS for production - temporary allow all origins for debugging
 app.use(cors({
-  origin: [
-    'http://localhost:5173',
-    'http://localhost:3000', 
-    'https://bell-app.vercel.app',
-    /https:\/\/.*\.vercel\.app$/,  // Allow all vercel.app subdomains
-    /https:\/\/bell-app-.*\.vercel\.app$/,  // Specific pattern for your app
-  ],
+  origin: true, // Temporarily allow all origins
   credentials: true,
   methods: ['GET', 'POST', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
