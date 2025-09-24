@@ -86,7 +86,14 @@ const LiveKitBellApp = () => {
 
       const data = await response.json();
       console.log('✅ Token generated successfully');
-      return data.token;
+      console.log('🎫 Token type:', typeof data.token);
+      console.log('🎫 Token value:', data.token);
+      
+      // Ensure token is a string
+      const token = typeof data.token === 'string' ? data.token : String(data.token);
+      console.log('🎫 Final token type:', typeof token);
+      
+      return token;
     } catch (error) {
       console.error('❌ Token generation error:', error);
       console.error('❌ Error details:', {
