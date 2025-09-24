@@ -182,26 +182,52 @@ const LiveKitBellApp = () => {
       const existingParticipants = new Map();
       console.log('Room participants object:', newRoom.participants);
       console.log('Room participants type:', typeof newRoom.participants);
+      console.log('Room state:', newRoom.state);
       
-      if (newRoom.participants && typeof newRoom.participants.forEach === 'function') {
-        newRoom.participants.forEach((participant) => {
-          existingParticipants.set(participant.sid, participant);
-          console.log('Existing participant found (forEach):', participant.identity, 'SID:', participant.sid);
-        });
-      } else if (newRoom.participants && typeof newRoom.participants.values === 'function') {
-        // Handle if participants is a Map
-        for (const participant of newRoom.participants.values()) {
-          existingParticipants.set(participant.sid, participant);
-          console.log('Existing participant found (values):', participant.identity, 'SID:', participant.sid);
+      // Wait for room to be fully connected
+      if (newRoom.state === ConnectionState.Connected) {
+        // Get all remote participants
+        const remoteParticipants = newRoom.remoteParticipants;
+        console.log('Remote participants from room:', remoteParticipants);
+        
+        if (remoteParticipants && remoteParticipants.size > 0) {
+          remoteParticipants.forEach((participant) => {
+            existingParticipants.set(participant.sid, participant);
+            console.log('Existing remote participant found:', participant.identity, 'SID:', participant.sid);
+            console.log('Participant tracks:', participant.trackPublications);
+          });
         }
       }
       
       console.log('Total existing participants loaded:', existingParticipants.size);
       setParticipants(existingParticipants);
+      
+      // Set local participant
+      setLocalParticipant(newRoom.localParticipant);
+      console.log('Local participant set:', newRoom.localParticipant?.identity);
 
-      // Enable camera and microphone by default
-      await enableCamera();
-      await enableMicrophone();
+      // Enable camera and microphone by default with better error handling
+      console.log('🎥 Enabling camera and microphone...');
+      
+      try {
+        await enableCamera();
+        console.log('✅ Camera enabled successfully');
+      } catch (error) {
+        console.error('❌ Camera enable failed:', error);
+      }
+      
+      try {
+        await enableMicrophone();
+        console.log('✅ Microphone enabled successfully');
+      } catch (error) {
+        console.error('❌ Microphone enable failed:', error);
+      }
+
+      // Give some time for tracks to publish and be received by other participants
+      setTimeout(() => {
+        console.log('🔄 Refreshing participants after media setup');
+        setParticipants(prev => new Map(prev));
+      }, 1000);
 
     } catch (error) {
       console.error('Failed to connect to room:', error);
@@ -215,13 +241,26 @@ const LiveKitBellApp = () => {
   // Set up room event listeners
   const setupRoomListeners = (room) => {
     room.on(RoomEvent.Connected, () => {
-      console.log('Connected to room');
+      console.log('✅ Connected to room');
       setIsConnected(true);
       setConnectionStatus('connected');
+      
+      // Refresh participants after connection is established
+      setTimeout(() => {
+        const remoteParticipants = room.remoteParticipants;
+        if (remoteParticipants && remoteParticipants.size > 0) {
+          const participantMap = new Map();
+          remoteParticipants.forEach((participant) => {
+            participantMap.set(participant.sid, participant);
+            console.log('🔄 Refreshed remote participant:', participant.identity);
+          });
+          setParticipants(participantMap);
+        }
+      }, 500);
     });
 
     room.on(RoomEvent.Disconnected, () => {
-      console.log('Disconnected from room');
+      console.log('❌ Disconnected from room');
       setIsConnected(false);
       setConnectionStatus('disconnected');
       cleanup();
@@ -250,17 +289,26 @@ const LiveKitBellApp = () => {
 
     room.on(RoomEvent.TrackSubscribed, (track, publication, participant) => {
       console.log('Track subscribed:', track.kind, 'from', participant.identity);
+      console.log('Track details:', {
+        trackSid: track.sid,
+        source: track.source,
+        muted: track.isMuted,
+        enabled: track.isEnabled
+      });
+      
       if (track.kind === Track.Kind.Video) {
         // Force re-render of participant videos
         setParticipants(prev => new Map(prev));
       } else if (track.kind === Track.Kind.Audio) {
-        // Ensure remote audio is played
+        // Ensure remote audio is played immediately
         const audioElement = track.attach();
         if (audioElement) {
           audioElement.autoplay = true;
-          audioElement.play().catch(error => {
-            console.log('Audio autoplay failed:', error);
-            // Add user interaction requirement notice
+          audioElement.volume = 1.0;
+          audioElement.play().then(() => {
+            console.log('Audio started playing for', participant.identity);
+          }).catch(error => {
+            console.log('Audio autoplay failed for', participant.identity, error);
           });
         }
       }
@@ -273,6 +321,18 @@ const LiveKitBellApp = () => {
         // Force re-render of participant videos
         setParticipants(prev => new Map(prev));
       }
+    });
+
+    // Handle track publications (when tracks become available)
+    room.on(RoomEvent.TrackPublished, (publication, participant) => {
+      console.log('Track published:', publication.kind, 'by', participant.identity);
+      // Force update to pick up new tracks
+      setParticipants(prev => new Map(prev));
+    });
+
+    room.on(RoomEvent.TrackUnpublished, (publication, participant) => {
+      console.log('Track unpublished:', publication.kind, 'by', participant.identity);
+      setParticipants(prev => new Map(prev));
     });
 
     room.on(RoomEvent.DataReceived, (payload, participant) => {
@@ -576,25 +636,36 @@ const LiveKitBellApp = () => {
       const updateVideoTrack = () => {
         let track = null;
         
-        // Try different ways to get the video track
-        if (participant.getTrack && typeof participant.getTrack === 'function') {
-          const trackPub = participant.getTrack(Track.Source.Camera);
-          track = trackPub?.track;
-        } else if (participant.tracks) {
-          // Alternative: search through tracks
-          for (const [trackSid, publication] of participant.tracks) {
-            if (publication.track && publication.track.kind === Track.Kind.Video) {
+        console.log('Updating video track for', participant.identity);
+        console.log('Participant track publications:', participant.trackPublications);
+        
+        // Get video track from publications
+        if (participant.trackPublications) {
+          for (const [trackSid, publication] of participant.trackPublications) {
+            console.log('Checking publication:', trackSid, publication.kind, publication.isSubscribed);
+            if (publication.kind === Track.Kind.Video && publication.isSubscribed && publication.track) {
               track = publication.track;
+              console.log('Found subscribed video track:', trackSid);
               break;
             }
           }
         }
         
-        console.log('Updating video track for', participant.identity, track ? 'found' : 'not found');
+        // Alternative: try getTrack method
+        if (!track && participant.getTrack && typeof participant.getTrack === 'function') {
+          const trackPub = participant.getTrack(Track.Source.Camera);
+          if (trackPub && trackPub.track) {
+            track = trackPub.track;
+            console.log('Found video track via getTrack:', trackPub.trackSid);
+          }
+        }
+        
+        console.log('Video track for', participant.identity, track ? 'found' : 'not found');
         
         if (track !== videoTrack) {
           // Clean up previous track
           if (videoTrack && videoRef.current) {
+            console.log('Detaching previous video track for', participant.identity);
             videoTrack.detach(videoRef.current);
           }
           
@@ -602,7 +673,14 @@ const LiveKitBellApp = () => {
           
           // Attach new track
           if (track && videoRef.current) {
+            console.log('Attaching video track for', participant.identity);
             track.attach(videoRef.current);
+            
+            // Ensure video plays
+            const videoEl = videoRef.current;
+            videoEl.autoplay = true;
+            videoEl.playsInline = true;
+            videoEl.play().catch(e => console.log('Video play failed:', e));
           }
         }
       };
@@ -613,12 +691,21 @@ const LiveKitBellApp = () => {
       // Listen for track changes
       const handleTrackSubscribed = (track, publication, remoteParticipant) => {
         if (remoteParticipant === participant && track.kind === Track.Kind.Video) {
+          console.log('Video track subscribed for', participant.identity);
           updateVideoTrack();
         }
       };
 
       const handleTrackUnsubscribed = (track, publication, remoteParticipant) => {
         if (remoteParticipant === participant && track.kind === Track.Kind.Video) {
+          console.log('Video track unsubscribed for', participant.identity);
+          updateVideoTrack();
+        }
+      };
+
+      const handleTrackPublished = (publication, remoteParticipant) => {
+        if (remoteParticipant === participant && publication.kind === Track.Kind.Video) {
+          console.log('Video track published for', participant.identity);
           updateVideoTrack();
         }
       };
@@ -626,6 +713,7 @@ const LiveKitBellApp = () => {
       // Add event listeners
       room?.on(RoomEvent.TrackSubscribed, handleTrackSubscribed);
       room?.on(RoomEvent.TrackUnsubscribed, handleTrackUnsubscribed);
+      room?.on(RoomEvent.TrackPublished, handleTrackPublished);
       
       return () => {
         // Cleanup
@@ -634,6 +722,7 @@ const LiveKitBellApp = () => {
         }
         room?.off(RoomEvent.TrackSubscribed, handleTrackSubscribed);
         room?.off(RoomEvent.TrackUnsubscribed, handleTrackUnsubscribed);
+        room?.off(RoomEvent.TrackPublished, handleTrackPublished);
       };
     }, [participant, room, isLocal, localVideoTrack, videoTrack]);
 
