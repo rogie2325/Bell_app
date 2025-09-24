@@ -180,18 +180,23 @@ const LiveKitBellApp = () => {
       
       // Initialize existing participants safely
       const existingParticipants = new Map();
+      console.log('Room participants object:', newRoom.participants);
+      console.log('Room participants type:', typeof newRoom.participants);
+      
       if (newRoom.participants && typeof newRoom.participants.forEach === 'function') {
         newRoom.participants.forEach((participant) => {
           existingParticipants.set(participant.sid, participant);
-          console.log('Existing participant found:', participant.identity);
+          console.log('Existing participant found (forEach):', participant.identity, 'SID:', participant.sid);
         });
       } else if (newRoom.participants && typeof newRoom.participants.values === 'function') {
         // Handle if participants is a Map
         for (const participant of newRoom.participants.values()) {
           existingParticipants.set(participant.sid, participant);
-          console.log('Existing participant found:', participant.identity);
+          console.log('Existing participant found (values):', participant.identity, 'SID:', participant.sid);
         }
       }
+      
+      console.log('Total existing participants loaded:', existingParticipants.size);
       setParticipants(existingParticipants);
 
       // Enable camera and microphone by default
@@ -223,19 +228,22 @@ const LiveKitBellApp = () => {
     });
 
     room.on(RoomEvent.ParticipantConnected, (participant) => {
-      console.log('Participant connected:', participant.identity);
+      console.log('Participant connected:', participant.identity, 'SID:', participant.sid);
       setParticipants(prev => {
         const newMap = new Map(prev);
         newMap.set(participant.sid, participant);
+        console.log('Updated participants map size:', newMap.size);
+        console.log('All participants:', Array.from(newMap.values()).map(p => p.identity));
         return newMap;
       });
     });
 
     room.on(RoomEvent.ParticipantDisconnected, (participant) => {
-      console.log('Participant disconnected:', participant.identity);
+      console.log('Participant disconnected:', participant.identity, 'SID:', participant.sid);
       setParticipants(prev => {
         const newMap = new Map(prev);
         newMap.delete(participant.sid);
+        console.log('Updated participants map size after disconnect:', newMap.size);
         return newMap;
       });
     });
@@ -543,6 +551,16 @@ const LiveKitBellApp = () => {
     const videoRef = useRef(null);
     const [videoTrack, setVideoTrack] = useState(null);
 
+    // Debug logging
+    useEffect(() => {
+      console.log('ParticipantVideo render:', {
+        isLocal,
+        participantId: participant?.sid,
+        participantIdentity: participant?.identity,
+        hasParticipant: !!participant
+      });
+    }, [participant, isLocal]);
+
     useEffect(() => {
       if (!participant) return;
 
@@ -747,26 +765,49 @@ const LiveKitBellApp = () => {
       {/* Video Grid */}
       <div className="flex-1 p-4 overflow-y-auto">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 min-h-full">
-          {/* Debug info for mobile */}
+          {/* Debug: Show what we're rendering */}
           <div className="hidden">
-            Participants: {participants.size}, Local: {localParticipant ? 'yes' : 'no'}
+            Rendering: Local={localParticipant ? 'yes' : 'no'}, Remote={participants.size}
           </div>
           
-          {/* Local video */}
+          {/* Always show local video first */}
           <ParticipantVideo participant={localParticipant} isLocal={true} />
           
           {/* Remote participants */}
-          {Array.from(participants.values()).map((participant) => (
-            <ParticipantVideo key={participant.sid} participant={participant} />
-          ))}
+          {Array.from(participants.values()).map((participant, index) => {
+            console.log(`Rendering remote participant ${index}:`, participant.identity, participant.sid);
+            return (
+              <ParticipantVideo key={participant.sid} participant={participant} />
+            );
+          })}
+          
+          {/* Debug grid item to show expected layout - only in development */}
+          {false && (
+            <div className="sm:hidden aspect-video bg-gray-800 rounded-lg flex items-center justify-center border-2 border-dashed border-gray-600">
+              <div className="text-white text-center text-xs">
+                <div>Debug Slot</div>
+                <div>Expected: {participants.size + 1} total</div>
+                <div>Grid cols: 1 (mobile)</div>
+              </div>
+            </div>
+          )}
         </div>
         
         {/* Mobile debugging - show participant count */}
         <div className="sm:hidden fixed top-20 left-4 bg-black bg-opacity-75 text-white px-3 py-2 rounded text-sm z-10">
           <div>Total: {participants.size + 1}</div>
           <div>Remote: {participants.size}</div>
-          <div className="text-xs opacity-75">
+          <div>Local: {localParticipant?.identity || username}</div>
+          <div className="text-xs opacity-75 mt-1">
             Grid: {participants.size + 1 === 1 ? '1x1' : participants.size + 1 === 2 ? '2x1' : '2x2'}
+          </div>
+          <div className="text-xs opacity-50">
+            Room: {room?.name || 'none'}
+          </div>
+          <div className="text-xs opacity-50">
+            {Array.from(participants.keys()).map(sid => 
+              participants.get(sid)?.identity || 'unknown'
+            ).join(', ')}
           </div>
         </div>
       </div>
