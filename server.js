@@ -17,7 +17,7 @@ app.use(express.json());
 
 // LiveKit configuration - replace with your actual values
 const LIVEKIT_API_KEY = process.env.LIVEKIT_API_KEY || 'your-api-key';
-const LIVEKIT_SECRET = process.env.LIVEKIT_SECRET || 'your-secret';
+const LIVEKIT_SECRET = process.env.LIVEKIT_API_SECRET || process.env.LIVEKIT_SECRET || 'your-secret';
 
 // Generate access token endpoint
 app.post('/api/token', (req, res) => {
