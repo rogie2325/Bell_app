@@ -7,10 +7,19 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "server": "node server.js",
+    "dev:full": "concurrently \"npm run server\" \"npm run dev\"",
+    "setup": "node setup-livekit.js",
+    "test:livekit": "node test-livekit.js"
   },
   "dependencies": {
     "@tailwindcss/forms": "^0.5.10",
+    "concurrently": "^7.6.0",
+    "cors": "^2.8.5",
+    "express": "^4.21.2",
+    "livekit-client": "^2.15.7",
+    "livekit-server-sdk": "^2.13.3",
     "lucide-react": "^0.544.0",
     "react": "^19.1.1",
     "react-dom": "^19.1.1"

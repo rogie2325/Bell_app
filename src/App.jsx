@@ -1,8 +1,8 @@
-import BellApp from './components/BellApp'
+import LiveKitBellApp from './components/LiveKitBellApp'
 import './App.css'
 
 function App() {
-  return <BellApp />
+  return <LiveKitBellApp />
 }
 
 export default App
