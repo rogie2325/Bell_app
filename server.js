@@ -6,8 +6,18 @@ import { AccessToken } from 'livekit-server-sdk';
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// Configure CORS
-app.use(cors());
+// Configure CORS for production
+app.use(cors({
+  origin: [
+    'http://localhost:5173',
+    'http://localhost:3000', 
+    'https://bell-app.vercel.app',
+    'https://bell-app-*.vercel.app'
+  ],
+  credentials: true,
+  methods: ['GET', 'POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
 app.use(express.json());
 
 // LiveKit configuration - replace with your actual values
@@ -16,10 +26,17 @@ const LIVEKIT_SECRET = process.env.LIVEKIT_SECRET || 'your-secret';
 
 // Generate access token endpoint
 app.post('/api/token', (req, res) => {
+  console.log('Token request received:', req.body);
   const { roomName, participantName } = req.body;
 
   if (!roomName || !participantName) {
+    console.error('Missing required fields:', { roomName, participantName });
     return res.status(400).json({ error: 'Room name and participant name are required' });
+  }
+
+  if (!LIVEKIT_API_KEY || !LIVEKIT_SECRET || LIVEKIT_API_KEY === 'your-api-key') {
+    console.error('LiveKit credentials not configured');
+    return res.status(500).json({ error: 'Server configuration error' });
   }
 
   try {
@@ -38,11 +55,12 @@ app.post('/api/token', (req, res) => {
     });
 
     const token = at.toJwt();
+    console.log('Token generated successfully for:', participantName);
     
     res.json({ token });
   } catch (error) {
     console.error('Error generating token:', error);
-    res.status(500).json({ error: 'Failed to generate token' });
+    res.status(500).json({ error: 'Failed to generate token', details: error.message });
   }
 });
 
