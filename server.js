@@ -35,18 +35,21 @@ app.post('/api/token', async (req, res) => {
   }
 
   try {
-    // Create access token
+    // Create access token with explicit options
     const at = new AccessToken(LIVEKIT_API_KEY, LIVEKIT_SECRET, {
       identity: participantName,
+      ttl: '6h', // Use string format for TTL
     });
 
-    // Add grants
+    // Add comprehensive grants
     at.addGrant({
       room: roomName,
       roomJoin: true,
       canPublish: true,
       canSubscribe: true,
       canPublishData: true,
+      roomRecord: false, // Explicitly disable recording
+      roomAdmin: false,  // Explicitly disable admin
     });
 
     // Generate the JWT token - handle both sync and async cases
@@ -68,9 +71,16 @@ app.post('/api/token', async (req, res) => {
       return res.status(500).json({ error: 'Token generation failed - invalid token type' });
     }
     
+    // Validate token format (should be JWT with 3 parts)
+    const tokenParts = token.split('.');
+    if (tokenParts.length !== 3) {
+      console.error('Invalid JWT format - token does not have 3 parts:', tokenParts.length);
+      return res.status(500).json({ error: 'Token generation failed - invalid JWT format' });
+    }
+    
     const responseData = { token };
     console.log('Response data type:', typeof responseData.token);
-    console.log('Response JSON:', JSON.stringify(responseData));
+    console.log('Response JSON preview:', JSON.stringify(responseData).substring(0, 100) + '...');
     
     res.json(responseData);
   } catch (error) {

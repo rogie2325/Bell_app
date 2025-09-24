@@ -130,9 +130,28 @@ const LiveKitBellApp = () => {
       setupRoomListeners(newRoom);
 
       // Generate access token
+      console.log('🎫 Requesting token for connection...');
       const token = await generateAccessToken(roomId, username);
+      console.log('🎫 Token received for connection:', typeof token);
+      console.log('🎫 Token length:', token?.length);
+      console.log('🎫 Token preview:', token ? token.substring(0, 100) + '...' : 'null/undefined');
 
-      // Connect to room
+      // Validate token format
+      if (!token || typeof token !== 'string') {
+        throw new Error('Invalid token received from server');
+      }
+
+      const tokenParts = token.split('.');
+      if (tokenParts.length !== 3) {
+        throw new Error(`Invalid JWT format - expected 3 parts, got ${tokenParts.length}`);
+      }
+
+      // Connect to room with detailed logging
+      console.log('🔌 Attempting to connect to room...');
+      console.log('🔌 LiveKit URL:', LIVEKIT_URL);
+      console.log('🔌 Room ID:', roomId);
+      console.log('🔌 Username:', username);
+      
       await newRoom.connect(LIVEKIT_URL, token);
 
       setRoom(newRoom);
