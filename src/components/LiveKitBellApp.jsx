@@ -176,12 +176,20 @@ const LiveKitBellApp = () => {
       setIsConnected(true);
       setConnectionStatus('connected');
       
-      // Initialize existing participants
+      // Initialize existing participants safely
       const existingParticipants = new Map();
-      newRoom.participants.forEach((participant) => {
-        existingParticipants.set(participant.sid, participant);
-        console.log('Existing participant found:', participant.identity);
-      });
+      if (newRoom.participants && typeof newRoom.participants.forEach === 'function') {
+        newRoom.participants.forEach((participant) => {
+          existingParticipants.set(participant.sid, participant);
+          console.log('Existing participant found:', participant.identity);
+        });
+      } else if (newRoom.participants && typeof newRoom.participants.values === 'function') {
+        // Handle if participants is a Map
+        for (const participant of newRoom.participants.values()) {
+          existingParticipants.set(participant.sid, participant);
+          console.log('Existing participant found:', participant.identity);
+        }
+      }
       setParticipants(existingParticipants);
 
       // Enable camera and microphone by default
@@ -430,24 +438,38 @@ const LiveKitBellApp = () => {
 
   // Cleanup function
   const cleanup = () => {
-    // Clean up local tracks
-    if (localVideoTrack) {
-      localVideoTrack.stop();
-      localVideoTrack.detach();
-    }
-    if (localAudioTrack) {
-      localAudioTrack.stop();
-      localAudioTrack.detach();
-    }
-    
-    // Clean up remote participant tracks
-    participants.forEach((participant) => {
-      participant.tracks.forEach((publication) => {
-        if (publication.track) {
-          publication.track.detach();
+    try {
+      // Clean up local tracks
+      if (localVideoTrack) {
+        localVideoTrack.stop();
+        if (localVideoTrack.detach) {
+          localVideoTrack.detach();
+        }
+      }
+      if (localAudioTrack) {
+        localAudioTrack.stop();
+        if (localAudioTrack.detach) {
+          localAudioTrack.detach();
+        }
+      }
+      
+      // Clean up remote participant tracks
+      participants.forEach((participant) => {
+        try {
+          if (participant.tracks) {
+            participant.tracks.forEach((publication) => {
+              if (publication.track && publication.track.detach) {
+                publication.track.detach();
+              }
+            });
+          }
+        } catch (error) {
+          console.warn('Error cleaning up participant tracks:', error);
         }
       });
-    });
+    } catch (error) {
+      console.warn('Error during cleanup:', error);
+    }
     
     setRoom(null);
     setLocalParticipant(null);
@@ -479,7 +501,22 @@ const LiveKitBellApp = () => {
 
       // For remote participants
       const updateVideoTrack = () => {
-        const track = participant.getTrack(Track.Source.Camera)?.track;
+        let track = null;
+        
+        // Try different ways to get the video track
+        if (participant.getTrack && typeof participant.getTrack === 'function') {
+          const trackPub = participant.getTrack(Track.Source.Camera);
+          track = trackPub?.track;
+        } else if (participant.tracks) {
+          // Alternative: search through tracks
+          for (const [trackSid, publication] of participant.tracks) {
+            if (publication.track && publication.track.kind === Track.Kind.Video) {
+              track = publication.track;
+              break;
+            }
+          }
+        }
+        
         console.log('Updating video track for', participant.identity, track ? 'found' : 'not found');
         
         if (track !== videoTrack) {
