@@ -117,10 +117,14 @@ const LiveKitBellApp = () => {
     setError('');
 
     try {
-      // Create new room instance
+      // Create new room instance with minimal configuration to avoid crypto errors
       const newRoom = new Room({
-        adaptiveStream: true,
-        dynacast: true,
+        // Disable features that might cause cryptographic issues
+        adaptiveStream: false,
+        dynacast: false,
+        publishDefaults: {
+          simulcast: false, // Disable simulcast
+        },
         videoCaptureDefaults: {
           resolution: VideoPresets.h720.resolution,
         },
@@ -146,13 +150,21 @@ const LiveKitBellApp = () => {
         throw new Error(`Invalid JWT format - expected 3 parts, got ${tokenParts.length}`);
       }
 
-      // Connect to room with detailed logging
+      // Connect to room with detailed logging and timeout
       console.log('🔌 Attempting to connect to room...');
       console.log('🔌 LiveKit URL:', LIVEKIT_URL);
       console.log('🔌 Room ID:', roomId);
       console.log('🔌 Username:', username);
       
-      await newRoom.connect(LIVEKIT_URL, token);
+      // Set a connection timeout
+      const connectWithTimeout = Promise.race([
+        newRoom.connect(LIVEKIT_URL, token),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Connection timeout after 30 seconds')), 30000)
+        )
+      ]);
+      
+      await connectWithTimeout;
 
       setRoom(newRoom);
       setLocalParticipant(newRoom.localParticipant);

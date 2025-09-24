@@ -35,21 +35,19 @@ app.post('/api/token', async (req, res) => {
   }
 
   try {
-    // Create access token with explicit options
+    // Create access token with minimal configuration
     const at = new AccessToken(LIVEKIT_API_KEY, LIVEKIT_SECRET, {
       identity: participantName,
-      ttl: '6h', // Use string format for TTL
+      ttl: 3600, // Use numeric TTL (1 hour)
     });
 
-    // Add comprehensive grants
+    // Add minimal grants only
     at.addGrant({
       room: roomName,
       roomJoin: true,
       canPublish: true,
       canSubscribe: true,
       canPublishData: true,
-      roomRecord: false, // Explicitly disable recording
-      roomAdmin: false,  // Explicitly disable admin
     });
 
     // Generate the JWT token - handle both sync and async cases
@@ -86,6 +84,34 @@ app.post('/api/token', async (req, res) => {
   } catch (error) {
     console.error('Error generating token:', error);
     res.status(500).json({ error: 'Failed to generate token', details: error.message });
+  }
+});
+
+// Alternative minimal token endpoint
+app.post('/api/token/minimal', async (req, res) => {
+  const { roomName, participantName } = req.body;
+  
+  if (!roomName || !participantName) {
+    return res.status(400).json({ error: 'Missing parameters' });
+  }
+
+  try {
+    const at = new AccessToken(LIVEKIT_API_KEY, LIVEKIT_SECRET, {
+      identity: participantName,
+    });
+    
+    // Absolute minimal grants
+    at.addGrant({
+      room: roomName,
+      roomJoin: true,
+    });
+    
+    const token = await at.toJwt();
+    console.log('Minimal token generated, length:', token.length);
+    res.json({ token });
+  } catch (error) {
+    console.error('Minimal token generation failed:', error);
+    res.status(500).json({ error: error.message });
   }
 });
 
