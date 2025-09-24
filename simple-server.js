@@ -54,12 +54,16 @@ app.post('/api/token', (req, res) => {
 
     const token = at.toJwt();
     console.log('✅ Token generated for:', participantName);
-    console.log('🎫 Token length:', token.length);
+    console.log('🎫 Token length:', token ? token.length : 'undefined');
     console.log('🎫 Token type:', typeof token);
-    console.log('🎫 Token preview:', token.slice(0, 20) + '...');
+    if (token && typeof token === 'string') {
+      console.log('🎫 Token preview:', token.substring(0, 20) + '...');
+    } else {
+      console.log('🎫 Token value:', token);
+    }
     
     const response = { token };
-    console.log('📤 Sending response:', JSON.stringify(response).slice(0, 50) + '...');
+    console.log('📤 Sending response keys:', Object.keys(response));
     
     res.json(response);
   } catch (error) {
