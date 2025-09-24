@@ -19,6 +19,12 @@ app.use(express.json());
 const LIVEKIT_API_KEY = process.env.LIVEKIT_API_KEY || 'your-api-key';
 const LIVEKIT_SECRET = process.env.LIVEKIT_API_SECRET || process.env.LIVEKIT_SECRET || 'your-secret';
 
+console.log('🔧 Server starting with LiveKit config:');
+console.log('API Key configured:', !!LIVEKIT_API_KEY && LIVEKIT_API_KEY !== 'your-api-key');
+console.log('Secret configured:', !!LIVEKIT_SECRET && LIVEKIT_SECRET !== 'your-secret');
+console.log('API Key prefix:', LIVEKIT_API_KEY?.substring(0, 6) || 'none');
+console.log('Secret prefix:', LIVEKIT_SECRET?.substring(0, 6) || 'none');
+
 // Generate access token endpoint
 app.post('/api/token', async (req, res) => {
   console.log('Token request received:', req.body);
