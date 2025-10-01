@@ -59,6 +59,15 @@ export default async function handler(req, res) {
     
     console.log('Token generated successfully');
     console.log('Token length:', token ? token.length : 'null');
+    console.log('API Key prefix:', LIVEKIT_API_KEY ? LIVEKIT_API_KEY.substring(0, 8) : 'none');
+    console.log('Secret prefix:', LIVEKIT_SECRET ? LIVEKIT_SECRET.substring(0, 8) : 'none');
+    
+    // Validate token is a proper JWT (should have 3 parts)
+    const tokenParts = token.split('.');
+    if (tokenParts.length !== 3) {
+      console.error('Invalid JWT format - token does not have 3 parts:', tokenParts.length);
+      return res.status(500).json({ error: 'Token generation failed - invalid JWT format' });
+    }
     
     res.json({ token });
   } catch (error) {

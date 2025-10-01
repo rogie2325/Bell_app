@@ -37,7 +37,12 @@ const WorkingLiveKitApp = () => {
   const BACKEND_URL = window.location.hostname === 'localhost' ? 
     'http://localhost:3001' : 
     window.location.origin;
-  const LIVEKIT_URL = 'wss://belllive-9f7u9uab.livekit.cloud';
+  const LIVEKIT_URL = import.meta.env.VITE_LIVEKIT_URL || 'wss://belllive-9f7u9uab.livekit.cloud';
+  
+  console.log('🔧 Frontend Config:');
+  console.log('Backend URL:', BACKEND_URL);
+  console.log('LiveKit URL:', LIVEKIT_URL);
+  console.log('Environment VITE_LIVEKIT_URL:', import.meta.env.VITE_LIVEKIT_URL);
 
   // Initialize audio context for mobile
   const initializeAudioContext = () => {
