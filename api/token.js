@@ -1,7 +1,6 @@
-// API route for Vercel deployment
-import { AccessToken } from 'livekit-server-sdk';
+import jwt from 'jsonwebtoken';
 
-export default async function handler(req, res) {
+export default function handler(req, res) {
   // Enable CORS
   res.setHeader('Access-Control-Allow-Credentials', true);
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -23,51 +22,43 @@ export default async function handler(req, res) {
   const { roomName, participantName } = req.body;
 
   if (!roomName || !participantName) {
-    console.error('Missing required fields:', { roomName, participantName });
     return res.status(400).json({ error: 'Room name and participant name are required' });
   }
 
   // Get LiveKit credentials from environment variables
   const LIVEKIT_API_KEY = process.env.LIVEKIT_API_KEY;
-  const LIVEKIT_SECRET = process.env.LIVEKIT_API_SECRET || process.env.LIVEKIT_SECRET;
+  const LIVEKIT_SECRET = process.env.LIVEKIT_SECRET;
 
   if (!LIVEKIT_API_KEY || !LIVEKIT_SECRET) {
-    console.error('LiveKit credentials not configured');
     return res.status(500).json({ error: 'Server configuration error - missing credentials' });
   }
 
   try {
-    console.log('Generating token for:', participantName, 'in room:', roomName);
-    console.log('Using API Key:', LIVEKIT_API_KEY ? LIVEKIT_API_KEY.substring(0, 8) + '...' : 'missing');
-    console.log('Using Secret:', LIVEKIT_SECRET ? LIVEKIT_SECRET.substring(0, 8) + '...' : 'missing');
-    
-    // Create access token
-    const at = new AccessToken(LIVEKIT_API_KEY, LIVEKIT_SECRET, {
-      identity: participantName,
-      ttl: 3600, // 1 hour
+    // Create LiveKit JWT token manually using jsonwebtoken
+    const now = Math.floor(Date.now() / 1000);
+    const exp = now + 3600; // 1 hour expiry
+
+    const payload = {
+      iss: LIVEKIT_API_KEY,
+      sub: participantName,
+      iat: now,
+      exp: exp,
+      video: {
+        room: roomName,
+        roomJoin: true,
+        canPublish: true,
+        canSubscribe: true,
+        canPublishData: true
+      }
+    };
+
+    const token = jwt.sign(payload, LIVEKIT_SECRET, {
+      algorithm: 'HS256',
+      header: {
+        alg: 'HS256',
+        typ: 'JWT'
+      }
     });
-
-    // Add grants
-    at.addGrant({
-      room: roomName,
-      roomJoin: true,
-      canPublish: true,
-      canSubscribe: true,
-      canPublishData: true,
-    });
-
-    console.log('Grants added, generating JWT...');
-
-    // Generate the JWT token - try both sync and async
-    let token;
-    try {
-      token = at.toJwt();
-      console.log('Sync token generation successful');
-    } catch (syncError) {
-      console.log('Sync token failed, trying async:', syncError.message);
-      token = await at.toJwt();
-      console.log('Async token generation successful');
-    }
     
     console.log('Token generated successfully');
     console.log('Token length:', token ? token.length : 'null');
