@@ -426,7 +426,7 @@ const WorkingLiveKitApp = () => {
                      Array.from(participant.audioTrackPublications.values()).some(pub => !pub.isMuted);
 
     return (
-      <div className="relative bg-black/30 rounded-lg overflow-hidden">
+      <div className="relative bg-gradient-to-br from-purple-900/30 to-blue-900/30 rounded-xl overflow-hidden shadow-lg">
         {/* Hidden audio element for remote audio playback */}
         <audio
           ref={audioRef}
@@ -453,18 +453,18 @@ const WorkingLiveKitApp = () => {
             className="w-full h-full object-cover"
           />
         ) : (
-          <div className="w-full h-full flex items-center justify-center bg-gray-800">
+          <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-gray-800 to-gray-900">
             <div className="text-center text-white">
-              <User size={48} className="mx-auto mb-2" />
-              <div className="text-sm">{participant.name}</div>
-              <div className="text-xs text-white/70">No video</div>
+              <User size={48} className="mx-auto mb-3 opacity-70" />
+              <div className="text-lg font-medium">{participant.name}</div>
+              <div className="text-sm text-white/60">Camera off</div>
             </div>
           </div>
         )}
         
-        <div className="absolute bottom-2 left-2 bg-black/50 text-white px-2 py-1 rounded text-sm flex items-center space-x-1">
+        <div className="absolute bottom-3 left-3 bg-black/70 backdrop-blur-sm text-white px-3 py-1 rounded-full text-sm font-medium flex items-center space-x-2">
           <span>{participant.name}</span>
-          {hasAudio && <span className="text-green-400">🎤</span>}
+          {hasAudio && <span className="text-green-400 text-xs">🎤</span>}
         </div>
       </div>
     );
@@ -520,11 +520,19 @@ const WorkingLiveKitApp = () => {
         <div className="w-full h-full flex flex-col">
           {/* Video area */}
           <div className="flex-1 relative bg-black/20 rounded-lg overflow-hidden">
-            {/* Video grid */}
-            <div className={`grid gap-2 p-4 h-full ${participants.length === 0 ? 'grid-cols-1' : participants.length === 1 ? 'grid-cols-2' : 'grid-cols-2 grid-rows-2'}`}>
+            {/* Dynamic video grid based on participant count */}
+            <div className={`grid gap-3 p-4 h-full ${
+              participants.length === 0 
+                ? 'grid-cols-1' 
+                : participants.length === 1 
+                  ? 'grid-cols-1 lg:grid-cols-2' 
+                  : participants.length === 2 
+                    ? 'grid-cols-1 lg:grid-cols-2' 
+                    : 'grid-cols-2 grid-rows-2'
+            }`}>
               
               {/* Local video */}
-              <div className="relative bg-black/30 rounded-lg overflow-hidden">
+              <div className="relative bg-gradient-to-br from-blue-900/30 to-purple-900/30 rounded-xl overflow-hidden shadow-lg">
                 <video
                   ref={localVideoRef}
                   autoPlay
@@ -532,9 +540,17 @@ const WorkingLiveKitApp = () => {
                   muted
                   className="w-full h-full object-cover"
                 />
-                <div className="absolute bottom-2 left-2 bg-black/50 text-white px-2 py-1 rounded text-sm">
+                <div className="absolute bottom-3 left-3 bg-black/70 backdrop-blur-sm text-white px-3 py-1 rounded-full text-sm font-medium">
                   You {!isVideoEnabled && '(Video Off)'}
                 </div>
+                {!isVideoEnabled && (
+                  <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
+                    <div className="text-center text-white">
+                      <VideoOff size={48} className="mx-auto mb-2 opacity-50" />
+                      <div className="text-sm">Video Off</div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Remote participants */}
@@ -542,53 +558,59 @@ const WorkingLiveKitApp = () => {
                 <RemoteParticipantVideo key={participant.sid} participant={participant} />
               ))}
 
-              {/* Empty slots for more participants */}
-              {Array.from({ length: Math.max(0, 3 - participants.length) }).map((_, index) => (
-                <div key={`empty-${index}`} className="bg-black/20 rounded-lg flex items-center justify-center border-2 border-dashed border-white/20">
-                  <div className="text-center text-white/50">
-                    <Users size={32} className="mx-auto mb-2" />
-                    <div className="text-xs">Waiting for user...</div>
+              {/* Show empty slot only when there's exactly 1 participant (to fill 2x1 grid nicely) */}
+              {participants.length === 1 && (
+                <div className="relative bg-black/10 rounded-xl border-2 border-dashed border-white/10 flex items-center justify-center">
+                  <div className="text-center text-white/40">
+                    <Users size={28} className="mx-auto mb-2 opacity-60" />
+                    <div className="text-sm font-medium">Invite friends</div>
+                    <div className="text-xs opacity-75">Share room: {roomId}</div>
                   </div>
                 </div>
-              ))}
+              )}
 
             </div>
             
             {/* Room info */}
-            <div className="absolute top-4 left-4 bg-black/50 backdrop-blur-sm rounded-lg px-3 py-2 text-white">
-              <div className="text-sm">Room: {roomId}</div>
-              <div className="text-sm">User: {username}</div>
-              <div className="text-sm">Participants: {participants.length + 1}</div>
+            <div className="absolute top-4 left-4 bg-black/70 backdrop-blur-md rounded-xl px-4 py-2 text-white shadow-lg">
+              <div className="flex items-center space-x-3">
+                <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+                <div className="text-sm font-medium">Room {roomId}</div>
+                <div className="text-xs text-white/70">•</div>
+                <div className="text-xs text-white/70">{participants.length + 1} online</div>
+              </div>
             </div>
 
             {/* Mobile audio enabler */}
-            <div className="absolute top-4 right-4">
-              <button
-                onClick={async () => {
-                  console.log('🔊 Manually enabling audio...');
-                  
-                  // Resume audio context
-                  const ctx = initializeAudioContext();
-                  if (ctx && ctx.state === 'suspended') {
-                    await ctx.resume();
-                  }
+            {participants.length > 0 && (
+              <div className="absolute top-4 right-4">
+                <button
+                  onClick={async () => {
+                    console.log('🔊 Manually enabling audio...');
+                    
+                    // Resume audio context
+                    const ctx = initializeAudioContext();
+                    if (ctx && ctx.state === 'suspended') {
+                      await ctx.resume();
+                    }
 
-                  // Force play all remote audio elements
-                  participants.forEach((participant, index) => {
-                    const audioElements = document.querySelectorAll('audio');
-                    audioElements.forEach(audio => {
-                      if (audio.srcObject) {
-                        console.log('🔊 Playing audio element...');
-                        audio.play().catch(e => console.warn('Audio play failed:', e));
-                      }
+                    // Force play all remote audio elements
+                    participants.forEach((participant, index) => {
+                      const audioElements = document.querySelectorAll('audio');
+                      audioElements.forEach(audio => {
+                        if (audio.srcObject) {
+                          console.log('🔊 Playing audio element...');
+                          audio.play().catch(e => console.warn('Audio play failed:', e));
+                        }
+                      });
                     });
-                  });
-                }}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg text-sm"
-              >
-                🔊 Enable Audio
-              </button>
-            </div>
+                  }}
+                  className="bg-blue-500/80 backdrop-blur-md hover:bg-blue-600/80 text-white px-4 py-2 rounded-xl text-sm font-medium shadow-lg transition-all"
+                >
+                  🔊 Enable Audio
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Controls */}
