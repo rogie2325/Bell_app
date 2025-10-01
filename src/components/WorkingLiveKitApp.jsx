@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   Camera, Mic, MicOff, Video, VideoOff, Phone, Users, MessageCircle, 
-  Settings, Send, X, PhoneOff, User
+  Settings, Send, X, PhoneOff, User, RotateCcw
 } from 'lucide-react';
 import {
   Room,
@@ -24,6 +24,7 @@ const WorkingLiveKitApp = () => {
   const [error, setError] = useState('');
   const [isConnecting, setIsConnecting] = useState(false);
   const [audioContext, setAudioContext] = useState(null);
+  const [facingMode, setFacingMode] = useState('user'); // 'user' for front camera, 'environment' for rear camera
 
   // LiveKit state
   const [room, setRoom] = useState(null);
@@ -215,14 +216,14 @@ const WorkingLiveKitApp = () => {
         throw new Error('Camera requires HTTPS on mobile devices. Please use ngrok or localhost.');
       }
 
-      // Mobile-friendly constraints
+      // Mobile-friendly constraints with camera facing mode
       const videoConstraints = isMobile ? {
-        facingMode: 'user',
+        facingMode: facingMode,
         width: { ideal: 480, max: 640 },
         height: { ideal: 360, max: 480 },
         frameRate: { ideal: 15, max: 30 }
       } : {
-        facingMode: 'user', 
+        facingMode: facingMode, 
         width: { ideal: 640 },
         height: { ideal: 480 }
       };
@@ -314,6 +315,56 @@ const WorkingLiveKitApp = () => {
         localAudioTrack.unmute();
       }
       setIsAudioEnabled(!isAudioEnabled);
+    }
+  };
+
+  // Flip camera (front/back) - mobile only
+  const flipCamera = async () => {
+    if (!room || !localVideoTrack) return;
+
+    try {
+      console.log('🔄 Flipping camera...');
+      const isMobile = /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+      
+      if (!isMobile) {
+        console.log('Camera flip only available on mobile devices');
+        return;
+      }
+
+      // Toggle between front ('user') and back ('environment') camera
+      const newFacingMode = facingMode === 'user' ? 'environment' : 'user';
+      console.log('Switching from', facingMode, 'to', newFacingMode);
+
+      // Stop current video track
+      localVideoTrack.stop();
+      
+      // Create new video track with flipped camera
+      const videoConstraints = {
+        facingMode: newFacingMode,
+        width: { ideal: 480, max: 640 },
+        height: { ideal: 360, max: 480 },
+        frameRate: { ideal: 15, max: 30 }
+      };
+
+      const newVideoTrack = await createLocalVideoTrack(videoConstraints);
+
+      // Replace the track in the room
+      await room.localParticipant.unpublishTrack(localVideoTrack);
+      await room.localParticipant.publishTrack(newVideoTrack);
+
+      // Update local video element
+      if (localVideoRef.current) {
+        newVideoTrack.attach(localVideoRef.current);
+      }
+
+      // Update state
+      setLocalVideoTrack(newVideoTrack);
+      setFacingMode(newFacingMode);
+
+      console.log('✅ Camera flipped successfully to', newFacingMode);
+    } catch (error) {
+      console.error('❌ Camera flip failed:', error);
+      setError('Failed to flip camera: ' + error.message);
     }
   };
 
@@ -559,6 +610,17 @@ const WorkingLiveKitApp = () => {
             >
               {isAudioEnabled ? <Mic size={20} /> : <MicOff size={20} />}
             </button>
+
+            {/* Camera flip button - mobile only */}
+            {/Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) && (
+              <button
+                onClick={flipCamera}
+                className="p-3 rounded-full bg-blue-500 text-white hover:bg-blue-600 transition-colors"
+                title={`Switch to ${facingMode === 'user' ? 'rear' : 'front'} camera`}
+              >
+                <RotateCcw size={20} />
+              </button>
+            )}
 
             <button
               onClick={disconnectFromRoom}
