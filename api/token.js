@@ -38,6 +38,8 @@ export default async function handler(req, res) {
 
   try {
     console.log('Generating token for:', participantName, 'in room:', roomName);
+    console.log('Using API Key:', LIVEKIT_API_KEY ? LIVEKIT_API_KEY.substring(0, 8) + '...' : 'missing');
+    console.log('Using Secret:', LIVEKIT_SECRET ? LIVEKIT_SECRET.substring(0, 8) + '...' : 'missing');
     
     // Create access token
     const at = new AccessToken(LIVEKIT_API_KEY, LIVEKIT_SECRET, {
@@ -54,13 +56,21 @@ export default async function handler(req, res) {
       canPublishData: true,
     });
 
-    // Generate the JWT token
-    const token = at.toJwt();
+    console.log('Grants added, generating JWT...');
+
+    // Generate the JWT token - try both sync and async
+    let token;
+    try {
+      token = at.toJwt();
+      console.log('Sync token generation successful');
+    } catch (syncError) {
+      console.log('Sync token failed, trying async:', syncError.message);
+      token = await at.toJwt();
+      console.log('Async token generation successful');
+    }
     
     console.log('Token generated successfully');
     console.log('Token length:', token ? token.length : 'null');
-    console.log('API Key prefix:', LIVEKIT_API_KEY ? LIVEKIT_API_KEY.substring(0, 8) : 'none');
-    console.log('Secret prefix:', LIVEKIT_SECRET ? LIVEKIT_SECRET.substring(0, 8) : 'none');
     
     // Validate token is a proper JWT (should have 3 parts)
     const tokenParts = token.split('.');
