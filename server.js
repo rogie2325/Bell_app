@@ -1,4 +1,5 @@
 // server.js - Simple Express server for LiveKit token generation
+import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import { AccessToken } from 'livekit-server-sdk';
@@ -14,6 +15,30 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
 app.use(express.json());
+
+// Serve static files from Vite dist folder
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+// Serve static files with proper MIME types and cache control
+app.use(express.static(join(__dirname, 'dist'), {
+  maxAge: 0, // Disable caching for development
+  etag: false,
+  lastModified: false,
+  setHeaders: (res, path) => {
+    if (path.endsWith('.js')) {
+      res.setHeader('Content-Type', 'application/javascript');
+    } else if (path.endsWith('.css')) {
+      res.setHeader('Content-Type', 'text/css');
+    }
+    // Disable caching
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+  }
+}));
 
 // LiveKit configuration - replace with your actual values
 const LIVEKIT_API_KEY = process.env.LIVEKIT_API_KEY || 'your-api-key';
@@ -140,6 +165,16 @@ app.get('/debug/config', (req, res) => {
   });
 });
 
-app.listen(PORT, () => {
+// Serve the React app for any non-API routes
+app.get('*', (req, res) => {
+  if (req.path.startsWith('/api/')) {
+    return res.status(404).json({ error: 'API endpoint not found' });
+  }
+  res.sendFile(join(__dirname, 'dist', 'index.html'));
+});
+
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 LiveKit token server running on port ${PORT}`);
+  console.log(`🌍 Server accessible at: http://10.12.2.170:${PORT}`);
+  console.log(`🌐 Frontend and backend served from same server`);
 });

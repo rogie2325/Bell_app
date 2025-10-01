@@ -51,7 +51,7 @@ const LiveKitBellApp = () => {
 
   // LiveKit server configuration
   const LIVEKIT_URL = import.meta.env.VITE_LIVEKIT_URL || 'wss://your-livekit-server.com';
-  const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
+  const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://10.12.2.170:3001';
 
   // Scroll to bottom when new messages arrive
   const scrollToBottom = () => {

@@ -1,8 +1,8 @@
-import LiveKitBellApp from './components/LiveKitBellApp'
+import WorkingLiveKitApp from './components/WorkingLiveKitApp'
 import './App.css'
 
 function App() {
-  return <LiveKitBellApp />
+  return <WorkingLiveKitApp />
 }
 
 export default App

@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bell App - Camera Test</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            font-family: Arial, sans-serif;
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            text-align: center;
+        }
+        button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            font-size: 18px;
+            border-radius: 8px;
+            cursor: pointer;
+            margin: 10px;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        button:disabled {
+            background: #666;
+            cursor: not-allowed;
+        }
+        #status {
+            margin: 20px 0;
+            padding: 15px;
+            border-radius: 8px;
+            background: rgba(0,0,0,0.3);
+        }
+        video {
+            width: 100%;
+            max-width: 640px;
+            height: auto;
+            border: 3px solid #4CAF50;
+            border-radius: 10px;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔔 Bell App - Camera Test</h1>
+        <p>Let's check if your camera and microphone work properly</p>
+        
+        <div id="status">
+            <p>📋 <strong>Status:</strong> Ready to test</p>
+        </div>
+        
+        <button id="testCamera" onclick="testCamera()">🎥 Test Camera & Microphone</button>
+        <button id="stopCamera" onclick="stopCamera()" disabled>⏹️ Stop Camera</button>
+        <button onclick="location.href='/'">🔙 Back to Bell App</button>
+        
+        <video id="localVideo" style="display: none;" autoplay playsinline muted></video>
+        
+        <div id="diagnostics" style="text-align: left; margin-top: 30px; background: rgba(0,0,0,0.5); padding: 20px; border-radius: 10px;">
+            <h3>🔍 Diagnostics</h3>
+            <p><strong>Browser:</strong> <span id="browser"></span></p>
+            <p><strong>Protocol:</strong> <span id="protocol"></span></p>
+            <p><strong>getUserMedia Support:</strong> <span id="getUserMediaSupport"></span></p>
+            <p><strong>Camera Permission:</strong> <span id="permission">Not tested</span></p>
+            <p><strong>Video Tracks:</strong> <span id="videoTracks">0</span></p>
+            <p><strong>Audio Tracks:</strong> <span id="audioTracks">0</span></p>
+        </div>
+    </div>
+
+    <script>
+        let localStream = null;
+        
+        // Initialize diagnostics
+        document.getElementById('browser').textContent = navigator.userAgent;
+        document.getElementById('protocol').textContent = window.location.protocol;
+        document.getElementById('getUserMediaSupport').textContent = 
+            (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) ? '✅ Supported' : '❌ Not Supported';
+        
+        function updateStatus(message, isError = false) {
+            const status = document.getElementById('status');
+            status.innerHTML = `<p>📋 <strong>Status:</strong> ${message}</p>`;
+            status.style.background = isError ? 'rgba(255, 0, 0, 0.3)' : 'rgba(0, 0, 0, 0.3)';
+        }
+        
+        async function testCamera() {
+            const testBtn = document.getElementById('testCamera');
+            const stopBtn = document.getElementById('stopCamera');
+            const video = document.getElementById('localVideo');
+            
+            testBtn.disabled = true;
+            updateStatus('🔍 Requesting camera and microphone access...');
+            
+            try {
+                // Check if getUserMedia is supported
+                if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                    throw new Error('getUserMedia not supported in this browser');
+                }
+                
+                console.log('🎥 Requesting camera access...');
+                
+                localStream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 },
+                        facingMode: 'user'
+                    },
+                    audio: {
+                        echoCancellation: true,
+                        noiseSuppression: true
+                    }
+                });
+                
+                console.log('✅ Camera access granted!', localStream);
+                
+                // Update diagnostics
+                const videoTracks = localStream.getVideoTracks();
+                const audioTracks = localStream.getAudioTracks();
+                
+                document.getElementById('permission').textContent = '✅ Granted';
+                document.getElementById('videoTracks').textContent = videoTracks.length + ' (' + (videoTracks[0]?.label || 'Unknown') + ')';
+                document.getElementById('audioTracks').textContent = audioTracks.length + ' (' + (audioTracks[0]?.label || 'Unknown') + ')';
+                
+                // Show video
+                video.srcObject = localStream;
+                video.style.display = 'block';
+                
+                updateStatus('✅ Camera and microphone working! You should see yourself in the video below.');
+                stopBtn.disabled = false;
+                
+            } catch (error) {
+                console.error('❌ Camera test failed:', error);
+                
+                document.getElementById('permission').textContent = '❌ ' + error.name;
+                
+                let errorMessage = '';
+                switch (error.name) {
+                    case 'NotAllowedError':
+                        errorMessage = '❌ Permission denied. Please click "Allow" when your browser asks for camera access, then try again.';
+                        break;
+                    case 'NotFoundError':
+                        errorMessage = '❌ No camera found. Please check that your camera is connected and not being used by another app.';
+                        break;
+                    case 'NotReadableError':
+                        errorMessage = '❌ Camera is busy. Please close other apps that might be using your camera (Skype, Zoom, etc.) and try again.';
+                        break;
+                    case 'OverconstrainedError':
+                        errorMessage = '❌ Camera constraints not supported. Your camera may not support the requested resolution.';
+                        break;
+                    case 'SecurityError':
+                        errorMessage = '❌ Security error. Camera access may be blocked by your browser or security settings.';
+                        break;
+                    default:
+                        errorMessage = '❌ Camera error: ' + error.message;
+                }
+                
+                updateStatus(errorMessage, true);
+                testBtn.disabled = false;
+            }
+        }
+        
+        function stopCamera() {
+            const testBtn = document.getElementById('testCamera');
+            const stopBtn = document.getElementById('stopCamera');
+            const video = document.getElementById('localVideo');
+            
+            if (localStream) {
+                localStream.getTracks().forEach(track => {
+                    track.stop();
+                    console.log('Stopped track:', track.kind);
+                });
+                localStream = null;
+            }
+            
+            video.style.display = 'none';
+            video.srcObject = null;
+            
+            updateStatus('⏹️ Camera stopped. Ready for another test.');
+            testBtn.disabled = false;
+            stopBtn.disabled = true;
+            
+            // Reset diagnostics
+            document.getElementById('permission').textContent = 'Not tested';
+            document.getElementById('videoTracks').textContent = '0';
+            document.getElementById('audioTracks').textContent = '0';
+        }
+        
+        // Test on page load
+        console.log('🔔 Bell Camera Test Page Loaded');
+        console.log('🌐 Location:', window.location.href);
+        console.log('🔒 Secure context:', window.isSecureContext);
+    </script>
+</body>
+</html>
