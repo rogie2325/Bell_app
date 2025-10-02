@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <title>Bell Background Animation - Export for Ads</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
@@ -44,19 +44,65 @@
     }
 
     .animate-scroll-down {
-      animation: scroll-down 25s linear infinite;
+      animation: scroll-down 28s linear infinite;
+      animation-delay: 0s;
     }
 
     .animate-scroll-up {
-      animation: scroll-up 30s linear infinite;
+      animation: scroll-up 35s linear infinite;
+      animation-delay: 0s;
     }
 
     .animate-scroll-down-slow {
-      animation: scroll-down-slow 35s linear infinite;
+      animation: scroll-down-slow 42s linear infinite;
+      animation-delay: 0s;
     }
 
     .animate-scroll-up-slow {
-      animation: scroll-up-slow 40s linear infinite;
+      animation: scroll-up-slow 48s linear infinite;
+      animation-delay: 0s;
+    }
+
+    /* Synchronize all animations to start together */
+    .parallax-column {
+      animation-fill-mode: both;
+      animation-play-state: running;
+    }
+
+    /* Mobile optimizations */
+    @media (max-width: 768px) {
+      .mobile-optimized {
+        padding-left: 1rem;
+        padding-right: 1rem;
+      }
+      
+      .mobile-pill-large {
+        font-size: 0.875rem;
+        padding: 0.75rem 1.5rem;
+      }
+      
+      .mobile-pill-small {
+        font-size: 0.75rem;
+        padding: 0.5rem 1rem;
+      }
+      
+      .mobile-spacing-tight {
+        gap: 3rem;
+      }
+      
+      .mobile-spacing-normal {
+        gap: 4rem;
+      }
+    }
+
+    /* Force complete transparency for OBS */
+    html, body {
+      background: transparent !important;
+      background-color: transparent !important;
+    }
+    
+    body::before, body::after {
+      display: none !important;
     }
 
     /* Ensure smooth rendering for video capture */
@@ -66,63 +112,73 @@
     }
   </style>
 </head>
-<body class="m-0 p-0 overflow-hidden">
-  <div class="w-full h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 flex items-center justify-center relative overflow-hidden">
+<body class="m-0 p-0 overflow-hidden" style="background: transparent !important;">
+  <div class="w-full h-screen flex items-center justify-center relative overflow-hidden" style="background: transparent !important;">
     
     <!-- Vertical Infinite Scrolling Background - Pill Style -->
     <div class="absolute inset-0 overflow-hidden pointer-events-none">
       
       <!-- Column 1 - Top to Bottom -->
-      <div class="absolute left-[5%] top-0 flex flex-col animate-scroll-down space-y-16">
-        <div class="space-y-16">
-          <div class="bg-black/40 backdrop-blur-sm rounded-full px-8 py-4 text-white font-semibold text-base flex items-center space-x-3 border border-white/10 rotate-12 shadow-lg min-w-max">
+            <!-- Column 1 - Top to Bottom -->
+      <div class="absolute left-[1%] md:left-[2%] top-0 flex flex-col animate-scroll-down parallax-column space-y-80 md:space-y-80">
+        <div class="space-y-80 md:space-y-80">
+          <div class="bg-black/40 backdrop-blur-sm rounded-full px-4 py-2 md:px-8 md:py-4 text-white font-semibold text-sm md:text-base flex items-center space-x-2 md:space-x-3 border border-white/10 rotate-12 shadow-lg min-w-max">
             <span>🍿</span>
-            <span>Watch Movies</span>
+            <span class="hidden sm:inline">Watch Movies</span>
+            <span class="sm:hidden">Movies</span>
           </div>
-          <div class="bg-red-500/30 backdrop-blur-sm rounded-full px-8 py-4 text-white font-semibold text-base flex items-center space-x-3 border border-white/10 -rotate-6 shadow-lg min-w-max">
+          <div class="bg-red-500/30 backdrop-blur-sm rounded-full px-4 py-2 md:px-8 md:py-4 text-white font-semibold text-sm md:text-base flex items-center space-x-2 md:space-x-3 border border-white/10 -rotate-6 shadow-lg min-w-max">
             <span>🎮</span>
-            <span>Play Games</span>
+            <span class="hidden sm:inline">Play Games</span>
+            <span class="sm:hidden">Games</span>
           </div>
-          <div class="bg-purple-500/30 backdrop-blur-sm rounded-full px-8 py-4 text-white font-semibold text-base flex items-center space-x-3 border border-white/10 rotate-3 shadow-lg min-w-max">
+          <div class="bg-purple-500/30 backdrop-blur-sm rounded-full px-4 py-2 md:px-8 md:py-4 text-white font-semibold text-sm md:text-base flex items-center space-x-2 md:space-x-3 border border-white/10 rotate-3 shadow-lg min-w-max">
             <span>👥</span>
-            <span>Meet People</span>
+            <span class="hidden sm:inline">Meet People</span>
+            <span class="sm:hidden">Meet</span>
           </div>
         </div>
         <!-- Repeat for seamless loop -->
-        <div class="space-y-16">
-          <div class="bg-black/40 backdrop-blur-sm rounded-full px-8 py-4 text-white font-semibold text-base flex items-center space-x-3 border border-white/10 rotate-12 shadow-lg min-w-max">
+        <div class="space-y-80 md:space-y-80">
+          <div class="bg-black/40 backdrop-blur-sm rounded-full px-4 py-2 md:px-8 md:py-4 text-white font-semibold text-sm md:text-base flex items-center space-x-2 md:space-x-3 border border-white/10 rotate-12 shadow-lg min-w-max">
             <span>🍿</span>
-            <span>Watch Movies</span>
+            <span class="hidden sm:inline">Watch Movies</span>
+            <span class="sm:hidden">Movies</span>
           </div>
-          <div class="bg-red-500/30 backdrop-blur-sm rounded-full px-8 py-4 text-white font-semibold text-base flex items-center space-x-3 border border-white/10 -rotate-6 shadow-lg min-w-max">
+          <div class="bg-red-500/30 backdrop-blur-sm rounded-full px-4 py-2 md:px-8 md:py-4 text-white font-semibold text-sm md:text-base flex items-center space-x-2 md:space-x-3 border border-white/10 -rotate-6 shadow-lg min-w-max">
             <span>🎮</span>
-            <span>Play Games</span>
+            <span class="hidden sm:inline">Play Games</span>
+            <span class="sm:hidden">Games</span>
           </div>
-          <div class="bg-purple-500/30 backdrop-blur-sm rounded-full px-8 py-4 text-white font-semibold text-base flex items-center space-x-3 border border-white/10 rotate-3 shadow-lg min-w-max">
+          <div class="bg-purple-500/30 backdrop-blur-sm rounded-full px-4 py-2 md:px-8 md:py-4 text-white font-semibold text-sm md:text-base flex items-center space-x-2 md:space-x-3 border border-white/10 rotate-3 shadow-lg min-w-max">
             <span>👥</span>
-            <span>Meet People</span>
+            <span class="hidden sm:inline">Meet People</span>
+            <span class="sm:hidden">Meet</span>
           </div>
         </div>
       </div>
 
       <!-- Column 2 - Bottom to Top -->
-      <div class="absolute right-[5%] bottom-0 flex flex-col-reverse animate-scroll-up space-y-reverse space-y-16">
-        <div class="space-y-reverse space-y-16">
-          <div class="bg-teal-500/30 backdrop-blur-sm rounded-full px-8 py-4 text-white font-semibold text-base flex items-center space-x-3 border border-white/10 -rotate-12 shadow-lg min-w-max">
+      <div class="absolute right-[1%] md:right-[2%] bottom-0 flex flex-col-reverse animate-scroll-up parallax-column space-y-reverse space-y-80 md:space-y-80">
+        <div class="space-y-reverse space-y-80 md:space-y-80">
+          <div class="bg-teal-500/30 backdrop-blur-sm rounded-full px-4 py-2 md:px-8 md:py-4 text-white font-semibold text-sm md:text-base flex items-center space-x-2 md:space-x-3 border border-white/10 -rotate-12 shadow-lg min-w-max">
             <span>🎵</span>
-            <span>Play Music</span>
+            <span class="hidden sm:inline">Play Music</span>
+            <span class="sm:hidden">Music</span>
           </div>
-          <div class="bg-orange-500/30 backdrop-blur-sm rounded-full px-8 py-4 text-white font-semibold text-base flex items-center space-x-3 border border-white/10 rotate-6 shadow-lg min-w-max">
+          <div class="bg-orange-500/30 backdrop-blur-sm rounded-full px-4 py-2 md:px-8 md:py-4 text-white font-semibold text-sm md:text-base flex items-center space-x-2 md:space-x-3 border border-white/10 rotate-6 shadow-lg min-w-max">
             <span>🧠</span>
-            <span>Learn</span>
+            <span class="hidden sm:inline">Learn</span>
+            <span class="sm:hidden">Learn</span>
           </div>
-          <div class="bg-cyan-400/30 backdrop-blur-sm rounded-full px-8 py-4 text-white font-semibold text-base flex items-center space-x-3 border border-white/10 -rotate-3 shadow-lg min-w-max">
+          <div class="bg-cyan-400/30 backdrop-blur-sm rounded-full px-4 py-2 md:px-8 md:py-4 text-white font-semibold text-sm md:text-base flex items-center space-x-2 md:space-x-3 border border-white/10 -rotate-3 shadow-lg min-w-max">
             <span>👋</span>
-            <span>Join Groups</span>
+            <span class="hidden sm:inline">Join Groups</span>
+            <span class="sm:hidden">Join</span>
           </div>
         </div>
         <!-- Repeat for seamless loop -->
-        <div class="space-y-reverse space-y-16">
+        <div class="space-y-reverse space-y-80">
           <div class="bg-teal-500/30 backdrop-blur-sm rounded-full px-8 py-4 text-white font-semibold text-base flex items-center space-x-3 border border-white/10 -rotate-12 shadow-lg min-w-max">
             <span>🎵</span>
             <span>Play Music</span>
@@ -139,8 +195,8 @@
       </div>
 
       <!-- Column 3 - Top to Bottom (Slower) -->
-      <div class="absolute left-[25%] top-0 flex flex-col animate-scroll-down-slow space-y-20">
-        <div class="space-y-20">
+      <div class="hidden md:flex absolute left-[20%] top-0 flex-col animate-scroll-down-slow parallax-column space-y-96">
+        <div class="space-y-96">
           <div class="bg-blue-500/25 backdrop-blur-sm rounded-full px-6 py-3 text-white/80 font-medium text-sm flex items-center space-x-2 border border-white/10 rotate-6 shadow-md min-w-max">
             <span>📹</span>
             <span>HD Video</span>
@@ -155,7 +211,7 @@
           </div>
         </div>
         <!-- Repeat -->
-        <div class="space-y-20">
+        <div class="space-y-96">
           <div class="bg-blue-500/25 backdrop-blur-sm rounded-full px-6 py-3 text-white/80 font-medium text-sm flex items-center space-x-2 border border-white/10 rotate-6 shadow-md min-w-max">
             <span>📹</span>
             <span>HD Video</span>
@@ -172,8 +228,23 @@
       </div>
 
       <!-- Column 4 - Bottom to Top (Slower) -->
-      <div class="absolute right-[25%] bottom-0 flex flex-col-reverse animate-scroll-up-slow space-y-reverse space-y-18">
-        <div class="space-y-reverse space-y-18">
+      <div class="hidden md:flex absolute right-[20%] bottom-0 flex-col-reverse animate-scroll-up-slow parallax-column space-y-reverse space-y-72">
+        <div class="space-y-reverse space-y-72">
+          <div class="bg-yellow-500/25 backdrop-blur-sm rounded-full px-6 py-3 text-white/80 font-medium text-sm flex items-center space-x-2 border border-white/10 -rotate-9 shadow-md min-w-max">
+            <span>⭐</span>
+            <span>Premium</span>
+          </div>
+          <div class="bg-indigo-500/25 backdrop-blur-sm rounded-full px-6 py-3 text-white/80 font-medium text-sm flex items-center space-x-2 border border-white/10 rotate-15 shadow-md min-w-max">
+            <span>🔒</span>
+            <span>Secure</span>
+          </div>
+          <div class="bg-emerald-500/25 backdrop-blur-sm rounded-full px-6 py-3 text-white/80 font-medium text-sm flex items-center space-x-2 border border-white/10 -rotate-6 shadow-md min-w-max">
+            <span>💬</span>
+            <span>Chat</span>
+          </div>
+        </div>
+        <!-- Repeat -->
+        <div class="space-y-reverse space-y-72">
           <div class="bg-yellow-500/25 backdrop-blur-sm rounded-full px-6 py-3 text-white/80 font-medium text-sm flex items-center space-x-2 border border-white/10 -rotate-9 shadow-md min-w-max">
             <span>⭐</span>
             <span>Premium</span>
@@ -190,8 +261,21 @@
       </div>
 
       <!-- Column 5 - Center floating elements -->
-      <div class="absolute left-[50%] top-0 flex flex-col animate-scroll-down space-y-24 transform -translate-x-1/2">
-        <div class="space-y-24">
+      <div class="absolute left-[50%] top-0 flex flex-col animate-scroll-down parallax-column space-y-80 md:space-y-80 transform -translate-x-1/2">
+        <div class="space-y-80 md:space-y-80">
+          <div class="bg-gradient-to-r from-purple-500/20 to-pink-500/20 backdrop-blur-sm rounded-full px-6 py-3 md:px-10 md:py-5 text-white/90 font-bold text-base md:text-lg flex items-center space-x-3 md:space-x-4 border border-white/20 rotate-2 shadow-xl min-w-max">
+            <span>🎉</span>
+            <span class="hidden sm:inline">Join Bell Today</span>
+            <span class="sm:hidden">Bell</span>
+          </div>
+          <div class="bg-gradient-to-r from-blue-500/20 to-cyan-500/20 backdrop-blur-sm rounded-full px-5 py-3 md:px-8 md:py-4 text-white/80 font-semibold text-sm md:text-base flex items-center space-x-2 md:space-x-3 border border-white/15 -rotate-4 shadow-lg min-w-max">
+            <span>🌟</span>
+            <span class="hidden sm:inline">Connect Instantly</span>
+            <span class="sm:hidden">Connect</span>
+          </div>
+        </div>
+        <!-- Repeat -->
+        <div class="space-y-80">
           <div class="bg-gradient-to-r from-purple-500/20 to-pink-500/20 backdrop-blur-sm rounded-full px-10 py-5 text-white/90 font-bold text-lg flex items-center space-x-4 border border-white/20 rotate-2 shadow-xl min-w-max">
             <span>🎉</span>
             <span>Join Bell Today</span>
@@ -202,15 +286,55 @@
           </div>
         </div>
       </div>
-    </div>
 
-    <!-- Bell Logo for Branding -->
-    <div class="z-10 text-center">
-      <div class="text-8xl font-black text-white/10 mb-4">
-        Bell
+      <!-- Column 6 - Left-Center -->
+      <div class="hidden lg:flex absolute left-[40%] bottom-0 flex-col-reverse animate-scroll-up parallax-column space-y-reverse space-y-68">
+        <div class="space-y-reverse space-y-68">
+          <div class="bg-rose-500/25 backdrop-blur-sm rounded-full px-7 py-3 text-white/85 font-medium text-sm flex items-center space-x-2 border border-white/10 rotate-8 shadow-md min-w-max">
+            <span>🎬</span>
+            <span>Stream Live</span>
+          </div>
+          <div class="bg-violet-500/25 backdrop-blur-sm rounded-full px-7 py-3 text-white/85 font-medium text-sm flex items-center space-x-2 border border-white/10 -rotate-10 shadow-md min-w-max">
+            <span>🎯</span>
+            <span>Interactive</span>
+          </div>
+        </div>
+        <!-- Repeat -->
+        <div class="space-y-reverse space-y-68">
+          <div class="bg-rose-500/25 backdrop-blur-sm rounded-full px-7 py-3 text-white/85 font-medium text-sm flex items-center space-x-2 border border-white/10 rotate-8 shadow-md min-w-max">
+            <span>🎬</span>
+            <span>Stream Live</span>
+          </div>
+          <div class="bg-violet-500/25 backdrop-blur-sm rounded-full px-7 py-3 text-white/85 font-medium text-sm flex items-center space-x-2 border border-white/10 -rotate-10 shadow-md min-w-max">
+            <span>🎯</span>
+            <span>Interactive</span>
+          </div>
+        </div>
       </div>
-      <div class="text-2xl font-bold text-white/20">
-        Virtual Streaming
+
+      <!-- Column 7 - Right-Center -->
+      <div class="hidden lg:flex absolute right-[40%] top-0 flex-col animate-scroll-down-slow parallax-column space-y-76">
+        <div class="space-y-76">
+          <div class="bg-amber-500/25 backdrop-blur-sm rounded-full px-7 py-3 text-white/85 font-medium text-sm flex items-center space-x-2 border border-white/10 -rotate-7 shadow-md min-w-max">
+            <span>⚡</span>
+            <span>Real-time</span>
+          </div>
+          <div class="bg-sky-500/25 backdrop-blur-sm rounded-full px-7 py-3 text-white/85 font-medium text-sm flex items-center space-x-2 border border-white/10 rotate-11 shadow-md min-w-max">
+            <span>🌐</span>
+            <span>Global</span>
+          </div>
+        </div>
+        <!-- Repeat -->
+        <div class="space-y-76">
+          <div class="bg-amber-500/25 backdrop-blur-sm rounded-full px-7 py-3 text-white/85 font-medium text-sm flex items-center space-x-2 border border-white/10 -rotate-7 shadow-md min-w-max">
+            <span>⚡</span>
+            <span>Real-time</span>
+          </div>
+          <div class="bg-sky-500/25 backdrop-blur-sm rounded-full px-7 py-3 text-white/85 font-medium text-sm flex items-center space-x-2 border border-white/10 rotate-11 shadow-md min-w-max">
+            <span>🌐</span>
+            <span>Global</span>
+          </div>
+        </div>
       </div>
     </div>
   </div>
