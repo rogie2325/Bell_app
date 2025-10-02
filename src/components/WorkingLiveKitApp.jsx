@@ -34,10 +34,8 @@ const WorkingLiveKitApp = () => {
   // Refs
   const localVideoRef = useRef(null);
 
-  // Backend URL - detect if we're on localhost or ngrok
-  const BACKEND_URL = window.location.hostname === 'localhost' ? 
-    'http://localhost:3001' : 
-    window.location.origin;
+  // Backend URL - always use Vercel for now (since local server not running)
+  const BACKEND_URL = 'https://bell-app.vercel.app';
   const LIVEKIT_URL = import.meta.env.VITE_LIVEKIT_URL || 'wss://belllive-9f7u9uab.livekit.cloud';
   
   console.log('🔧 Frontend Config:');
@@ -369,7 +367,7 @@ const WorkingLiveKitApp = () => {
   };
 
   // Remote participant video component
-  const RemoteParticipantVideo = ({ participant }) => {
+  const RemoteParticipantVideo = ({ participant, isSmall = false }) => {
     const videoRef = useRef(null);
     const audioRef = useRef(null);
 
@@ -426,7 +424,7 @@ const WorkingLiveKitApp = () => {
                      Array.from(participant.audioTrackPublications.values()).some(pub => !pub.isMuted);
 
     return (
-      <div className="relative bg-gradient-to-br from-purple-900/30 to-blue-900/30 rounded-xl overflow-hidden shadow-lg">
+      <div className={`relative bg-gradient-to-br from-purple-900/30 to-blue-900/30 ${isSmall ? 'rounded-lg' : 'rounded-xl'} overflow-hidden shadow-lg h-full`}>
         {/* Hidden audio element for remote audio playback */}
         <audio
           ref={audioRef}
@@ -455,15 +453,19 @@ const WorkingLiveKitApp = () => {
         ) : (
           <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-gray-800 to-gray-900">
             <div className="text-center text-white">
-              <User size={48} className="mx-auto mb-3 opacity-70" />
-              <div className="text-lg font-medium">{participant.name}</div>
-              <div className="text-sm text-white/60">Camera off</div>
+              <User size={isSmall ? 20 : 48} className="mx-auto mb-1 opacity-70" />
+              {!isSmall && (
+                <>
+                  <div className="text-lg font-medium">{participant.name}</div>
+                  <div className="text-sm text-white/60">Camera off</div>
+                </>
+              )}
             </div>
           </div>
         )}
         
-        <div className="absolute bottom-3 left-3 bg-black/70 backdrop-blur-sm text-white px-3 py-1 rounded-full text-sm font-medium flex items-center space-x-2">
-          <span>{participant.name}</span>
+        <div className={`absolute ${isSmall ? 'bottom-1 left-1' : 'bottom-3 left-3'} bg-black/70 backdrop-blur-sm text-white ${isSmall ? 'px-2 py-0.5' : 'px-3 py-1'} rounded-full ${isSmall ? 'text-xs' : 'text-sm'} font-medium flex items-center space-x-1`}>
+          <span>{isSmall ? participant.name.split(' ')[0] : participant.name}</span>
           {hasAudio && <span className="text-green-400 text-xs">🎤</span>}
         </div>
       </div>
@@ -517,58 +519,85 @@ const WorkingLiveKitApp = () => {
         </div>
       ) : (
         // Video call interface
-        <div className="w-full h-full flex flex-col">
-          {/* Video area */}
-          <div className="flex-1 relative bg-black/20 rounded-lg overflow-hidden">
-            {/* Dynamic video grid based on participant count */}
-            <div className={`grid gap-3 p-4 h-full ${
-              participants.length === 0 
-                ? 'grid-cols-1' 
-                : participants.length === 1 
-                  ? 'grid-cols-1 lg:grid-cols-2' 
-                  : participants.length === 2 
-                    ? 'grid-cols-1 lg:grid-cols-2' 
-                    : 'grid-cols-2 grid-rows-2'
-            }`}>
+        <div className="w-full h-full flex flex-col relative">
+          {/* Main video area with Yubo-style compact layout */}
+          <div className="flex-1 relative overflow-hidden">
+            {/* Compact video grid - Yubo style */}
+            <div className="h-full p-3 flex flex-col space-y-3">
               
-              {/* Local video */}
-              <div className="relative bg-gradient-to-br from-blue-900/30 to-purple-900/30 rounded-xl overflow-hidden shadow-lg">
-                <video
-                  ref={localVideoRef}
-                  autoPlay
-                  playsInline
-                  muted
-                  className="w-full h-full object-cover"
-                />
-                <div className="absolute bottom-3 left-3 bg-black/70 backdrop-blur-sm text-white px-3 py-1 rounded-full text-sm font-medium">
-                  You {!isVideoEnabled && '(Video Off)'}
-                </div>
-                {!isVideoEnabled && (
-                  <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
-                    <div className="text-center text-white">
-                      <VideoOff size={48} className="mx-auto mb-2 opacity-50" />
-                      <div className="text-sm">Video Off</div>
+              {/* Main video section - takes most space but not full screen */}
+              <div className="flex-1 max-h-[60vh] min-h-[300px]">
+                {participants.length > 0 ? (
+                  /* When there are participants, show main participant video larger */
+                  <div className="h-full rounded-2xl overflow-hidden shadow-xl">
+                    <RemoteParticipantVideo participant={participants[0]} />
+                  </div>
+                ) : (
+                  /* When alone, show local video in main area */
+                  <div className="relative bg-gradient-to-br from-blue-900/30 to-purple-900/30 rounded-2xl overflow-hidden shadow-xl h-full">
+                    <video
+                      ref={localVideoRef}
+                      autoPlay
+                      playsInline
+                      muted
+                      className="w-full h-full object-cover"
+                    />
+                    <div className="absolute bottom-4 left-4 bg-black/70 backdrop-blur-sm text-white px-3 py-2 rounded-full text-sm font-medium">
+                      You {!isVideoEnabled && '(Video Off)'}
                     </div>
+                    {!isVideoEnabled && (
+                      <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
+                        <div className="text-center text-white">
+                          <VideoOff size={48} className="mx-auto mb-2 opacity-50" />
+                          <div className="text-sm">Video Off</div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
 
-              {/* Remote participants */}
-              {participants.map((participant, index) => (
-                <RemoteParticipantVideo key={participant.sid} participant={participant} />
-              ))}
-
-              {/* Show empty slot only when there's exactly 1 participant (to fill 2x1 grid nicely) */}
-              {participants.length === 1 && (
-                <div className="relative bg-black/10 rounded-xl border-2 border-dashed border-white/10 flex items-center justify-center">
-                  <div className="text-center text-white/40">
-                    <Users size={28} className="mx-auto mb-2 opacity-60" />
-                    <div className="text-sm font-medium">Invite friends</div>
-                    <div className="text-xs opacity-75">Share room: {roomId}</div>
+              {/* Bottom row - smaller video thumbnails like Yubo */}
+              <div className="flex space-x-3 h-24">
+                
+                {participants.length > 0 && (
+                  /* Local video thumbnail when others are present */
+                  <div className="relative bg-gradient-to-br from-blue-900/30 to-purple-900/30 rounded-xl overflow-hidden shadow-lg w-24 flex-shrink-0">
+                    <video
+                      ref={localVideoRef}
+                      autoPlay
+                      playsInline
+                      muted
+                      className="w-full h-full object-cover"
+                    />
+                    <div className="absolute bottom-1 left-1 bg-black/70 text-white px-2 py-0.5 rounded text-xs font-medium">
+                      You
+                    </div>
+                    {!isVideoEnabled && (
+                      <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
+                        <VideoOff size={16} className="text-white opacity-50" />
+                      </div>
+                    )}
                   </div>
-                </div>
-              )}
+                )}
 
+                {/* Additional participants as small thumbnails */}
+                {participants.slice(1).map((participant, index) => (
+                  <div key={participant.sid} className="w-24 flex-shrink-0 h-24 rounded-xl overflow-hidden shadow-lg">
+                    <RemoteParticipantVideo participant={participant} isSmall={true} />
+                  </div>
+                ))}
+
+                {/* Invite prompt - only show when alone and in a compact way */}
+                {participants.length === 0 && (
+                  <div className="flex-1 bg-white/5 border-2 border-dashed border-white/20 rounded-xl flex items-center justify-center min-h-[96px]">
+                    <div className="text-center text-white/60 px-4">
+                      <Users size={20} className="mx-auto mb-1" />
+                      <div className="text-xs font-medium">Invite friends to room {roomId}</div>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
             
             {/* Room info */}
