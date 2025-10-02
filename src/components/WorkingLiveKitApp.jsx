@@ -27,6 +27,10 @@ const WorkingLiveKitApp = () => {
   const [audioContext, setAudioContext] = useState(null);
   const [facingMode, setFacingMode] = useState('user'); // 'user' for front camera, 'environment' for rear camera
 
+  // PWA Install state
+  const [deferredPrompt, setDeferredPrompt] = useState(null);
+  const [showInstallButton, setShowInstallButton] = useState(false);
+
   // LiveKit state
   const [room, setRoom] = useState(null);
   const [localVideoTrack, setLocalVideoTrack] = useState(null);
