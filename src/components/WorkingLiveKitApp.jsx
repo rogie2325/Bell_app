@@ -13,6 +13,7 @@ import {
   createLocalAudioTrack,
 } from 'livekit-client';
 import { DotLottieReact } from '@lottiefiles/dotlottie-react';
+import InstallPrompt from './InstallPrompt';
 
 const WorkingLiveKitApp = () => {
   // State
@@ -26,10 +27,6 @@ const WorkingLiveKitApp = () => {
   const [isConnecting, setIsConnecting] = useState(false);
   const [audioContext, setAudioContext] = useState(null);
   const [facingMode, setFacingMode] = useState('user'); // 'user' for front camera, 'environment' for rear camera
-
-  // PWA Install state
-  const [deferredPrompt, setDeferredPrompt] = useState(null);
-  const [showInstallButton, setShowInstallButton] = useState(false);
 
   // LiveKit state
   const [room, setRoom] = useState(null);
@@ -62,47 +59,6 @@ const WorkingLiveKitApp = () => {
       }
     }
     return audioContext;
-  };
-
-  // PWA Install functionality
-  useEffect(() => {
-    const handleBeforeInstallPrompt = (e) => {
-      console.log('📱 PWA install prompt available');
-      e.preventDefault();
-      setDeferredPrompt(e);
-      setShowInstallButton(true);
-    };
-
-    const handleAppInstalled = () => {
-      console.log('📱 PWA was installed');
-      setShowInstallButton(false);
-      setDeferredPrompt(null);
-    };
-
-    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-    window.addEventListener('appinstalled', handleAppInstalled);
-
-    // Check if already installed
-    if (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) {
-      console.log('📱 App is already installed');
-      setShowInstallButton(false);
-    }
-
-    return () => {
-      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-      window.removeEventListener('appinstalled', handleAppInstalled);
-    };
-  }, []);
-
-  const handleInstallClick = async () => {
-    if (!deferredPrompt) return;
-    
-    deferredPrompt.prompt();
-    const { outcome } = await deferredPrompt.userChoice;
-    
-    console.log(`📱 User ${outcome} the install prompt`);
-    setDeferredPrompt(null);
-    setShowInstallButton(false);
   };
 
   // Test camera first, then connect to LiveKit
@@ -650,17 +606,6 @@ const WorkingLiveKitApp = () => {
             >
               {isConnecting ? 'Connecting...' : 'Join Room'}
             </button>
-
-            {/* PWA Install Button */}
-            {showInstallButton && (
-              <button
-                onClick={handleInstallClick}
-                className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-semibold py-3 rounded-lg transition-all flex items-center justify-center space-x-2"
-              >
-                <span>📱</span>
-                <span>Install Bell App</span>
-              </button>
-            )}
           </div>
           
           {/* Creator Credit */}
@@ -861,6 +806,9 @@ const WorkingLiveKitApp = () => {
           </div>
         </div>
       )}
+      
+      {/* Install App Prompt */}
+      <InstallPrompt />
     </div>
   );
 };
