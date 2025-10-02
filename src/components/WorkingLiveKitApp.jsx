@@ -525,8 +525,8 @@ const WorkingLiveKitApp = () => {
             {/* Compact video grid - Yubo style */}
             <div className="h-full p-3 flex flex-col space-y-3">
               
-              {/* Main video section - takes most space but not full screen */}
-              <div className="flex-1 max-h-[60vh] min-h-[300px]">
+              {/* Main video section - more reasonable size */}
+              <div className="flex-1 max-h-[45vh] min-h-[250px]">
                 {participants.length > 0 ? (
                   /* When there are participants, show main participant video larger */
                   <div className="h-full rounded-2xl overflow-hidden shadow-xl">
@@ -557,12 +557,12 @@ const WorkingLiveKitApp = () => {
                 )}
               </div>
 
-              {/* Bottom row - smaller video thumbnails like Yubo */}
-              <div className="flex space-x-3 h-24">
+              {/* Bottom row - bigger thumbnails */}
+              <div className="flex space-x-3 h-32">
                 
                 {participants.length > 0 && (
-                  /* Local video thumbnail when others are present */
-                  <div className="relative bg-gradient-to-br from-blue-900/30 to-purple-900/30 rounded-xl overflow-hidden shadow-lg w-24 flex-shrink-0">
+                  /* Local video thumbnail when others are present - bigger */
+                  <div className="relative bg-gradient-to-br from-blue-900/30 to-purple-900/30 rounded-xl overflow-hidden shadow-lg w-32 flex-shrink-0">
                     <video
                       ref={localVideoRef}
                       autoPlay
@@ -570,30 +570,30 @@ const WorkingLiveKitApp = () => {
                       muted
                       className="w-full h-full object-cover"
                     />
-                    <div className="absolute bottom-1 left-1 bg-black/70 text-white px-2 py-0.5 rounded text-xs font-medium">
+                    <div className="absolute bottom-2 left-2 bg-black/70 text-white px-2 py-1 rounded text-sm font-medium">
                       You
                     </div>
                     {!isVideoEnabled && (
                       <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
-                        <VideoOff size={16} className="text-white opacity-50" />
+                        <VideoOff size={24} className="text-white opacity-50" />
                       </div>
                     )}
                   </div>
                 )}
 
-                {/* Additional participants as small thumbnails */}
+                {/* Additional participants as medium thumbnails */}
                 {participants.slice(1).map((participant, index) => (
-                  <div key={participant.sid} className="w-24 flex-shrink-0 h-24 rounded-xl overflow-hidden shadow-lg">
+                  <div key={participant.sid} className="w-32 flex-shrink-0 h-32 rounded-xl overflow-hidden shadow-lg">
                     <RemoteParticipantVideo participant={participant} isSmall={true} />
                   </div>
                 ))}
 
                 {/* Invite prompt - only show when alone and in a compact way */}
                 {participants.length === 0 && (
-                  <div className="flex-1 bg-white/5 border-2 border-dashed border-white/20 rounded-xl flex items-center justify-center min-h-[96px]">
+                  <div className="flex-1 bg-white/5 border-2 border-dashed border-white/20 rounded-xl flex items-center justify-center min-h-[128px]">
                     <div className="text-center text-white/60 px-4">
-                      <Users size={20} className="mx-auto mb-1" />
-                      <div className="text-xs font-medium">Invite friends to room {roomId}</div>
+                      <Users size={24} className="mx-auto mb-2" />
+                      <div className="text-sm font-medium">Invite friends to room {roomId}</div>
                     </div>
                   </div>
                 )}
