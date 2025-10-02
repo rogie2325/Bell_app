@@ -12,6 +12,7 @@ import {
   createLocalVideoTrack,
   createLocalAudioTrack,
 } from 'livekit-client';
+import { DotLottieReact } from '@lottiefiles/dotlottie-react';
 
 const WorkingLiveKitApp = () => {
   // State
@@ -473,13 +474,100 @@ const WorkingLiveKitApp = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 flex items-center justify-center p-4 relative overflow-hidden">
+      
+      {/* Vertical Infinite Scrolling Background - Pill Style */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        {/* Column 1 - Top to Bottom */}
+        <div className="absolute left-[5%] top-0 flex flex-col animate-scroll-down space-y-16">
+          {[...Array(20)].map((_, i) => (
+            <div key={i} className="space-y-16">
+              <div className="bg-black/40 backdrop-blur-sm rounded-full px-8 py-4 text-white font-semibold text-base flex items-center space-x-3 border border-white/10 rotate-12 shadow-lg min-w-max">
+                <span>🍿</span>
+                <span>Watch Movies</span>
+              </div>
+              <div className="bg-red-500/30 backdrop-blur-sm rounded-full px-8 py-4 text-white font-semibold text-base flex items-center space-x-3 border border-white/10 -rotate-6 shadow-lg min-w-max">
+                <span>🎮</span>
+                <span>Play Games</span>
+              </div>
+              <div className="bg-purple-500/30 backdrop-blur-sm rounded-full px-8 py-4 text-white font-semibold text-base flex items-center space-x-3 border border-white/10 rotate-3 shadow-lg min-w-max">
+                <span>👥</span>
+                <span>Meet People</span>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Column 2 - Bottom to Top */}
+        <div className="absolute right-[5%] bottom-0 flex flex-col-reverse animate-scroll-up space-y-reverse space-y-16">
+          {[...Array(20)].map((_, i) => (
+            <div key={i} className="space-y-reverse space-y-16">
+              <div className="bg-teal-500/30 backdrop-blur-sm rounded-full px-8 py-4 text-white font-semibold text-base flex items-center space-x-3 border border-white/10 -rotate-12 shadow-lg min-w-max">
+                <span>🎵</span>
+                <span>Play Music</span>
+              </div>
+              <div className="bg-orange-500/30 backdrop-blur-sm rounded-full px-8 py-4 text-white font-semibold text-base flex items-center space-x-3 border border-white/10 rotate-6 shadow-lg min-w-max">
+                <span>🧠</span>
+                <span>Learn</span>
+              </div>
+              <div className="bg-cyan-400/30 backdrop-blur-sm rounded-full px-8 py-4 text-white font-semibold text-base flex items-center space-x-3 border border-white/10 -rotate-3 shadow-lg min-w-max">
+                <span>👋</span>
+                <span>Join Groups</span>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Column 3 - Top to Bottom (Slower) */}
+        <div className="absolute left-[25%] top-0 flex flex-col animate-scroll-down-slow space-y-20">
+          {[...Array(15)].map((_, i) => (
+            <div key={i} className="space-y-20">
+              <div className="bg-blue-500/25 backdrop-blur-sm rounded-full px-6 py-3 text-white/80 font-medium text-sm flex items-center space-x-2 border border-white/10 rotate-6 shadow-md min-w-max">
+                <Video size={16} />
+                <span>HD Video</span>
+              </div>
+              <div className="bg-green-500/25 backdrop-blur-sm rounded-full px-6 py-3 text-white/80 font-medium text-sm flex items-center space-x-2 border border-white/10 -rotate-12 shadow-md min-w-max">
+                <Mic size={16} />
+                <span>Clear Audio</span>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Column 4 - Bottom to Top (Slower) */}
+        <div className="absolute right-[25%] bottom-0 flex flex-col-reverse animate-scroll-up-slow space-y-reverse space-y-20">
+          {[...Array(15)].map((_, i) => (
+            <div key={i} className="space-y-reverse space-y-20">
+              <div className="bg-purple-400/25 backdrop-blur-sm rounded-full px-6 py-3 text-white/80 font-medium text-sm flex items-center space-x-2 border border-white/10 rotate-9 shadow-md min-w-max">
+                <Users size={16} />
+                <span>Connect</span>
+              </div>
+              <div className="bg-pink-400/25 backdrop-blur-sm rounded-full px-6 py-3 text-white/80 font-medium text-sm flex items-center space-x-2 border border-white/10 -rotate-6 shadow-md min-w-max">
+                <Camera size={16} />
+                <span>Share</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
       {!isConnected ? (
         // Login screen
-        <div className="bg-white/10 backdrop-blur-md rounded-2xl p-8 max-w-md w-full">
-          <h1 className="text-3xl font-bold text-white text-center mb-6">
-            📹 LiveKit Bell App
-          </h1>
+        <div className="bg-white/10 backdrop-blur-md rounded-2xl p-8 max-w-md w-full z-10 relative">
+          <div className="text-center mb-6">
+            {/* Lottie Animation */}
+            <div className="w-24 h-24 mx-auto mb-4">
+              <DotLottieReact
+                src="https://lottie.host/382b9b34-6297-4922-b6f1-74ce1bd6a0df/GWEATjpKGc.lottie"
+                loop
+                autoplay
+                className="w-full h-full"
+              />
+            </div>
+            <h1 className="text-3xl font-bold text-white">
+              Welcome To Bell
+            </h1>
+          </div>
           
           {error && (
             <div className="bg-red-500/20 border border-red-500/50 rounded-lg p-3 mb-4">
@@ -515,6 +603,13 @@ const WorkingLiveKitApp = () => {
             >
               {isConnecting ? 'Connecting...' : 'Join Room'}
             </button>
+          </div>
+          
+          {/* Creator Credit */}
+          <div className="mt-6 pt-4 border-t border-white/20">
+            <p className="text-center text-white/60 text-sm">
+              Created by <span className="text-white/80 font-medium">Elijah Rose</span>
+            </p>
           </div>
         </div>
       ) : (
@@ -642,43 +737,79 @@ const WorkingLiveKitApp = () => {
             )}
           </div>
 
-          {/* Controls */}
-          <div className="flex items-center justify-center space-x-4 mt-6">
-            <button
-              onClick={toggleVideo}
-              className={`p-3 rounded-full transition-colors ${
-                isVideoEnabled ? 'bg-white/20 text-white' : 'bg-red-500 text-white'
-              }`}
-            >
-              {isVideoEnabled ? <Video size={20} /> : <VideoOff size={20} />}
-            </button>
-            
-            <button
-              onClick={toggleAudio}
-              className={`p-3 rounded-full transition-colors ${
-                isAudioEnabled ? 'bg-white/20 text-white' : 'bg-red-500 text-white'
-              }`}
-            >
-              {isAudioEnabled ? <Mic size={20} /> : <MicOff size={20} />}
-            </button>
+          {/* iOS-style Glassmorphic Controls Overlay */}
+          <div 
+            className="absolute inset-0 pointer-events-none group/controls"
+            onTouchStart={() => {}} // Enable touch events for mobile
+          >
+            {/* Glassmorphic control panel */}
+            <div id="control-panel" className="absolute bottom-6 left-1/2 transform -translate-x-1/2 pointer-events-auto opacity-0 group-hover/controls:opacity-100 md:group-hover/controls:opacity-100 transition-all duration-300 ease-out translate-y-4 group-hover/controls:translate-y-0">
+              <div className="bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl p-4 shadow-2xl">
+                <div className="flex items-center space-x-4">
+                  <button
+                    onClick={toggleVideo}
+                    className={`p-4 rounded-2xl transition-all duration-200 ${
+                      isVideoEnabled 
+                        ? 'bg-white/20 text-white hover:bg-white/30' 
+                        : 'bg-red-500/80 text-white hover:bg-red-500'
+                    } backdrop-blur-sm border border-white/10 hover:border-white/30 hover:scale-105`}
+                  >
+                    {isVideoEnabled ? <Video size={24} /> : <VideoOff size={24} />}
+                  </button>
+                  
+                  <button
+                    onClick={toggleAudio}
+                    className={`p-4 rounded-2xl transition-all duration-200 ${
+                      isAudioEnabled 
+                        ? 'bg-white/20 text-white hover:bg-white/30' 
+                        : 'bg-red-500/80 text-white hover:bg-red-500'
+                    } backdrop-blur-sm border border-white/10 hover:border-white/30 hover:scale-105`}
+                  >
+                    {isAudioEnabled ? <Mic size={24} /> : <MicOff size={24} />}
+                  </button>
 
-            {/* Camera flip button - mobile only */}
-            {/Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) && (
-              <button
-                onClick={flipCamera}
-                className="p-3 rounded-full bg-blue-500 text-white hover:bg-blue-600 transition-colors"
-                title={`Switch to ${facingMode === 'user' ? 'rear' : 'front'} camera`}
-              >
-                <RotateCcw size={20} />
-              </button>
-            )}
+                  {/* Camera flip button - mobile only */}
+                  {/Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) && (
+                    <button
+                      onClick={flipCamera}
+                      className="p-4 rounded-2xl bg-blue-500/80 text-white hover:bg-blue-500 transition-all duration-200 backdrop-blur-sm border border-white/10 hover:border-white/30 hover:scale-105"
+                      title={`Switch to ${facingMode === 'user' ? 'rear' : 'front'} camera`}
+                    >
+                      <RotateCcw size={24} />
+                    </button>
+                  )}
 
-            <button
-              onClick={disconnectFromRoom}
-              className="p-3 rounded-full bg-red-500 text-white hover:bg-red-600 transition-colors"
-            >
-              <PhoneOff size={20} />
-            </button>
+                  <button
+                    onClick={disconnectFromRoom}
+                    className="p-4 rounded-2xl bg-red-500/80 text-white hover:bg-red-500 transition-all duration-200 backdrop-blur-sm border border-white/10 hover:border-white/30 hover:scale-105"
+                  >
+                    <PhoneOff size={24} />
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Mobile tap anywhere to show controls */}
+            <div className="md:hidden absolute inset-0 bg-transparent pointer-events-auto" 
+              onClick={() => {
+                const panel = document.getElementById('control-panel');
+                if (panel) {
+                  const isVisible = panel.classList.contains('opacity-100');
+                  if (isVisible) {
+                    panel.classList.remove('opacity-100', 'translate-y-0');
+                    panel.classList.add('translate-y-4');
+                  } else {
+                    panel.classList.add('opacity-100', 'translate-y-0');
+                    panel.classList.remove('translate-y-4');
+                    // Auto-hide after 4 seconds
+                    setTimeout(() => {
+                      panel.classList.remove('opacity-100', 'translate-y-0');
+                      panel.classList.add('translate-y-4');
+                    }, 4000);
+                  }
+                }
+              }}
+            />
           </div>
         </div>
       )}

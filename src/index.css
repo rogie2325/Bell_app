@@ -1,3 +1,56 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Vertical Infinite Scroll Animations */
+@keyframes scroll-down {
+  0% {
+    transform: translateY(-120vh);
+  }
+  100% {
+    transform: translateY(120vh);
+  }
+}
+
+@keyframes scroll-up {
+  0% {
+    transform: translateY(120vh);
+  }
+  100% {
+    transform: translateY(-120vh);
+  }
+}
+
+@keyframes scroll-down-slow {
+  0% {
+    transform: translateY(-120vh);
+  }
+  100% {
+    transform: translateY(120vh);
+  }
+}
+
+@keyframes scroll-up-slow {
+  0% {
+    transform: translateY(120vh);
+  }
+  100% {
+    transform: translateY(-120vh);
+  }
+}
+
+.animate-scroll-down {
+  animation: scroll-down 25s linear infinite;
+}
+
+.animate-scroll-up {
+  animation: scroll-up 30s linear infinite;
+}
+
+.animate-scroll-down-slow {
+  animation: scroll-down-slow 35s linear infinite;
+}
+
+.animate-scroll-up-slow {
+  animation: scroll-up-slow 40s linear infinite;
+}
