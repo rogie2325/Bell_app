@@ -476,8 +476,9 @@ const WorkingLiveKitApp = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 flex items-center justify-center p-4 relative overflow-hidden">
       
-      {/* Vertical Infinite Scrolling Background - Pill Style */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+      {/* Vertical Infinite Scrolling Background - Only show on welcome screen */}
+      {!isConnected && (
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
         {/* Column 1 - Top to Bottom */}
         <div className="absolute left-[5%] top-0 flex flex-col animate-scroll-down space-y-16">
           {[...Array(20)].map((_, i) => (
@@ -550,6 +551,7 @@ const WorkingLiveKitApp = () => {
           ))}
         </div>
       </div>
+      )}
 
       {!isConnected ? (
         // Login screen
@@ -613,15 +615,15 @@ const WorkingLiveKitApp = () => {
           </div>
         </div>
       ) : (
-        // Video call interface
-        <div className="w-full h-full flex flex-col relative">
+        // Video call interface - compact layout with bottom spacing
+        <div className="w-full max-w-6xl mx-auto h-full flex flex-col relative pb-24">
           {/* Main video area with Yubo-style compact layout */}
           <div className="flex-1 relative overflow-hidden">
-            {/* Compact video grid - Yubo style */}
-            <div className="h-full p-3 flex flex-col space-y-3">
+            {/* Compact video grid - Yubo style with better spacing */}
+            <div className="h-full p-4 flex flex-col space-y-4">
               
-              {/* Main video section - more reasonable size */}
-              <div className="flex-1 max-h-[45vh] min-h-[250px]">
+              {/* Main video section - compact size */}
+              <div className="flex-1 max-h-[60vh] min-h-[300px] max-w-4xl mx-auto">
                 {participants.length > 0 ? (
                   /* When there are participants, show main participant video larger */
                   <div className="h-full rounded-2xl overflow-hidden shadow-xl">
@@ -682,16 +684,6 @@ const WorkingLiveKitApp = () => {
                     <RemoteParticipantVideo participant={participant} isSmall={true} />
                   </div>
                 ))}
-
-                {/* Invite prompt - only show when alone and in a compact way */}
-                {participants.length === 0 && (
-                  <div className="flex-1 bg-white/5 border-2 border-dashed border-white/20 rounded-xl flex items-center justify-center min-h-[128px]">
-                    <div className="text-center text-white/60 px-4">
-                      <Users size={24} className="mx-auto mb-2" />
-                      <div className="text-sm font-medium">Invite friends to room {roomId}</div>
-                    </div>
-                  </div>
-                )}
               </div>
             </div>
             
@@ -742,8 +734,8 @@ const WorkingLiveKitApp = () => {
             className="absolute inset-0 pointer-events-none group/controls"
             onTouchStart={() => {}} // Enable touch events for mobile
           >
-            {/* Glassmorphic control panel */}
-            <div id="control-panel" className="absolute bottom-6 left-1/2 transform -translate-x-1/2 pointer-events-auto opacity-0 group-hover/controls:opacity-100 md:group-hover/controls:opacity-100 transition-all duration-300 ease-out translate-y-4 group-hover/controls:translate-y-0">
+            {/* Glassmorphic control panel - always visible with proper spacing */}
+            <div id="control-panel" className="absolute bottom-12 left-1/2 transform -translate-x-1/2 pointer-events-auto opacity-100 transition-all duration-300 ease-out">
               <div className="bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl p-4 shadow-2xl">
                 <div className="flex items-center space-x-4">
                   <button
