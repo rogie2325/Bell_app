@@ -9,6 +9,7 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "server": "node server.js",
+    "dev-server": "node dev-server.js",
     "simple-server": "node simple-server.js",
     "production-server": "node production-server.js",
     "start": "node production-server.js",

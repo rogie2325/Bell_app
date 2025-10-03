@@ -35,6 +35,35 @@ app.use(cors(corsOptions));
 app.use(express.json());
 app.use(limiter);
 
+// Serve static files with proper MIME types
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+app.use(express.static(join(__dirname, 'dist'), {
+  maxAge: 0, // Disable caching for development
+  etag: false,
+  lastModified: false,
+  setHeaders: (res, path) => {
+    // Set proper MIME types
+    if (path.endsWith('.js')) {
+      res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+    } else if (path.endsWith('.mjs')) {
+      res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+    } else if (path.endsWith('.css')) {
+      res.setHeader('Content-Type', 'text/css; charset=utf-8');
+    } else if (path.endsWith('.html')) {
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    }
+    
+    // Disable caching
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+  }
+}));
+
 // Socket.IO configuration
 const io = new SocketIOServer(server, {
   cors: corsOptions,
@@ -235,6 +264,14 @@ app.get('/health', (req, res) => {
     activeUsers: activeConnections.size,
     environment: NODE_ENV
   });
+});
+
+// Serve the React app for any non-API routes
+app.get('*', (req, res) => {
+  if (req.path.startsWith('/api/')) {
+    return res.status(404).json({ error: 'API endpoint not found' });
+  }
+  res.sendFile(join(__dirname, 'dist', 'index.html'));
 });
 
 // Socket.IO connection handling
