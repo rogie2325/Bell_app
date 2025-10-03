@@ -14,7 +14,8 @@
     "start": "node production-server.js",
     "dev:full": "concurrently \"npm run production-server\" \"npm run dev\"",
     "setup": "node setup-livekit.js",
-    "test:livekit": "node test-livekit.js"
+    "test:livekit": "node test-livekit.js",
+    "ngrok": "node setup-ngrok.js"
   },
   "dependencies": {
     "@lottiefiles/dotlottie-react": "^0.17.3",

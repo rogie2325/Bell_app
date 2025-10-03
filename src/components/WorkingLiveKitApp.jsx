@@ -80,28 +80,41 @@ const RemoteParticipantVideo = ({ participant, isSmall = false }) => {
         console.log('⚠️ No video track to attach for:', participant.name || participant.identity);
       }
 
-      // Handle audio tracks
+      // Handle audio tracks - ENHANCED
       if (audioRef.current) {
         // Clear any existing audio first
         audioRef.current.srcObject = null;
         
         const audioPublications = Array.from(participant.audioTrackPublications.values());
-        const audioPublication = audioPublications.find(pub => pub.isSubscribed && pub.track);
+        const audioPublication = audioPublications.find(pub => pub.isSubscribed && pub.track && !pub.isMuted);
         
         if (audioPublication?.track && audioPublication.track.kind === 'audio') {
           try {
             console.log('🔊 Attaching remote audio for:', participant.name || participant.identity);
             audioPublication.track.attach(audioRef.current);
             
-            // Force play with user interaction
-            setTimeout(() => {
-              if (audioRef.current && audioRef.current.srcObject) {
-                console.log('🔊 Attempting to play remote audio...');
+            // Enhanced audio playback with multiple attempts
+            const attemptPlay = (attempts = 0) => {
+              if (audioRef.current && audioRef.current.srcObject && attempts < 3) {
+                console.log(`🔊 Attempting to play remote audio (attempt ${attempts + 1})...`);
                 audioRef.current.play()
-                  .then(() => console.log('✅ Remote audio playing'))
-                  .catch(e => console.warn('⚠️ Remote audio play failed:', e));
+                  .then(() => {
+                    console.log('✅ Remote audio playing successfully');
+                    // Set volume to ensure it's audible
+                    audioRef.current.volume = 1.0;
+                  })
+                  .catch(e => {
+                    console.warn(`⚠️ Remote audio play failed (attempt ${attempts + 1}):`, e);
+                    if (attempts < 2) {
+                      // Retry after a short delay
+                      setTimeout(() => attemptPlay(attempts + 1), 200 * (attempts + 1));
+                    }
+                  });
               }
-            }, 100);
+            };
+            
+            // Start playback attempts
+            setTimeout(() => attemptPlay(), 100);
           } catch (error) {
             console.error('❌ Failed to attach audio:', error);
           }
@@ -310,13 +323,24 @@ const WorkingLiveKitApp = () => {
   console.log('LiveKit URL:', LIVEKIT_URL);
   console.log('Environment VITE_LIVEKIT_URL:', import.meta.env.VITE_LIVEKIT_URL);
 
-  // Initialize audio context for mobile
+  // Initialize audio context for mobile - ENHANCED
   const initializeAudioContext = () => {
     if (!audioContext) {
       try {
         const ctx = new (window.AudioContext || window.webkitAudioContext)();
         setAudioContext(ctx);
         console.log('🔊 Audio context initialized');
+        
+        // Resume context if suspended (required for mobile)
+        if (ctx.state === 'suspended') {
+          console.log('🔊 Audio context suspended, attempting to resume...');
+          ctx.resume().then(() => {
+            console.log('✅ Audio context resumed successfully');
+          }).catch(error => {
+            console.warn('⚠️ Failed to resume audio context:', error);
+          });
+        }
+        
         return ctx;
       } catch (error) {
         console.warn('⚠️ Could not initialize audio context:', error);
@@ -549,7 +573,14 @@ const WorkingLiveKitApp = () => {
       const audioTrack = await createLocalAudioTrack({
         echoCancellation: true,
         noiseSuppression: true,
-        autoGainControl: true
+        autoGainControl: true,
+        sampleRate: 48000,
+        channelCount: 1,
+        // Enhanced mobile audio constraints
+        ...(isMobile && {
+          sampleSize: 16,
+          latency: 0.01 // Low latency for real-time communication
+        })
       });
 
       // Publish tracks
@@ -624,21 +655,21 @@ const WorkingLiveKitApp = () => {
     setRoom(null);
   };
 
-  // Toggle video
+  // Toggle video - FIXED: Don't unpublish tracks, just mute/unmute
   const toggleVideo = async () => {
     if (!localVideoTrack || !room) return;
 
     try {
       if (isVideoEnabled) {
-        // Turn off video - unpublish and mute
+        // Turn off video - ONLY mute, don't unpublish
         console.log('🎥 Turning off camera...');
-        await room.localParticipant.unpublishTrack(localVideoTrack);
         localVideoTrack.mute();
+        console.log('📹 Video muted (track still published)');
       } else {
-        // Turn on video - unmute and republish
+        // Turn on video - ONLY unmute, track is already published
         console.log('🎥 Turning on camera...');
         localVideoTrack.unmute();
-        await room.localParticipant.publishTrack(localVideoTrack);
+        console.log('📹 Video unmuted (track already published)');
       }
       setIsVideoEnabled(!isVideoEnabled);
       console.log('✅ Video toggle complete:', !isVideoEnabled ? 'ON' : 'OFF');
@@ -648,21 +679,21 @@ const WorkingLiveKitApp = () => {
     }
   };
 
-  // Toggle audio
+  // Toggle audio - FIXED: Don't unpublish tracks, just mute/unmute
   const toggleAudio = async () => {
     if (!localAudioTrack || !room) return;
 
     try {
       if (isAudioEnabled) {
-        // Turn off audio - unpublish and mute
+        // Turn off audio - ONLY mute, don't unpublish
         console.log('🎤 Turning off microphone...');
-        await room.localParticipant.unpublishTrack(localAudioTrack);
         localAudioTrack.mute();
+        console.log('🔇 Audio muted (track still published)');
       } else {
-        // Turn on audio - unmute and republish
+        // Turn on audio - ONLY unmute, track is already published
         console.log('🎤 Turning on microphone...');
         localAudioTrack.unmute();
-        await room.localParticipant.publishTrack(localAudioTrack);
+        console.log('🔊 Audio unmuted (track already published)');
       }
       setIsAudioEnabled(!isAudioEnabled);
       console.log('✅ Audio toggle complete:', !isAudioEnabled ? 'ON' : 'OFF');
@@ -784,6 +815,35 @@ const WorkingLiveKitApp = () => {
       chatMessagesRef.current.scrollTop = chatMessagesRef.current.scrollHeight;
     }
   }, [messages]);
+
+  // Initialize audio context on first user interaction (required for mobile)
+  useEffect(() => {
+    const handleUserInteraction = () => {
+      const ctx = initializeAudioContext();
+      if (ctx && ctx.state === 'suspended') {
+        ctx.resume().then(() => {
+          console.log('✅ Audio context resumed on user interaction');
+        }).catch(error => {
+          console.warn('⚠️ Failed to resume audio context on interaction:', error);
+        });
+      }
+      // Remove listeners after first interaction
+      document.removeEventListener('click', handleUserInteraction);
+      document.removeEventListener('touchstart', handleUserInteraction);
+      document.removeEventListener('keydown', handleUserInteraction);
+    };
+
+    // Add listeners for user interaction
+    document.addEventListener('click', handleUserInteraction);
+    document.addEventListener('touchstart', handleUserInteraction);
+    document.addEventListener('keydown', handleUserInteraction);
+
+    return () => {
+      document.removeEventListener('click', handleUserInteraction);
+      document.removeEventListener('touchstart', handleUserInteraction);
+      document.removeEventListener('keydown', handleUserInteraction);
+    };
+  }, []);
 
   // Close camera menu when clicking outside
   useEffect(() => {
