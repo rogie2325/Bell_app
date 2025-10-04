@@ -1,8 +1,8 @@
-import WorkingLiveKitApp from './components/WorkingLiveKitApp'
+import CleanLiveKitApp from './components/CleanLiveKitApp'
 import './App.css'
 
 function App() {
-  return <WorkingLiveKitApp />
+  return <CleanLiveKitApp />
 }
 
 export default App
