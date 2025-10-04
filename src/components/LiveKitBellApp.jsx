@@ -409,37 +409,44 @@ const LiveKitBellApp = () => {
   // Enable camera
   const enableCamera = async (facingMode = currentFacingMode) => {
     try {
-      // Stop existing video track if any
-      if (localVideoTrack) {
-        localVideoTrack.stop();
-        if (room?.localParticipant) {
-          await room.localParticipant.unpublishTrack(localVideoTrack);
+      if (localVideoTrack && facingMode === currentFacingMode) {
+        // Just unmute existing track if same facing mode
+        await localVideoTrack.unmute();
+        console.log('✅ Video track unmuted');
+      } else {
+        // Only recreate if facing mode changed or no track exists
+        if (localVideoTrack) {
+          // Clean up existing track when switching cameras
+          localVideoTrack.stop();
+          if (room?.localParticipant) {
+            await room.localParticipant.unpublishTrack(localVideoTrack);
+          }
         }
-        setLocalVideoTrack(null);
-      }
 
-      // Create video track with mobile-friendly constraints
-      const videoConstraints = {
-        width: { ideal: 1280, max: 1920 },
-        height: { ideal: 720, max: 1080 },
-        frameRate: { ideal: 30, max: 60 },
-        facingMode: { ideal: facingMode } // This enables camera flip on mobile
-      };
+        console.log('🎥 Creating video track with facing mode:', facingMode);
+        
+        // Create video track with mobile-friendly constraints
+        const videoConstraints = {
+          width: { ideal: 1280, max: 1920 },
+          height: { ideal: 720, max: 1080 },
+          frameRate: { ideal: 30, max: 60 },
+          facingMode: { ideal: facingMode }
+        };
 
-      const track = await createLocalVideoTrack({
-        video: videoConstraints
-      });
+        const track = await createLocalVideoTrack(videoConstraints);
 
-      if (room?.localParticipant) {
-        await room.localParticipant.publishTrack(track);
-      }
-      
-      setLocalVideoTrack(track);
-      setCurrentFacingMode(facingMode);
-      
-      // Attach to local video element
-      if (localVideoRef.current) {
-        track.attach(localVideoRef.current);
+        if (room?.localParticipant) {
+          await room.localParticipant.publishTrack(track);
+          console.log('✅ Video track published');
+        }
+        
+        setLocalVideoTrack(track);
+        setCurrentFacingMode(facingMode);
+        
+        // Attach to local video element
+        if (localVideoRef.current) {
+          track.attach(localVideoRef.current);
+        }
       }
       
       setIsVideoEnabled(true);
@@ -472,48 +479,48 @@ const LiveKitBellApp = () => {
   const enableMicrophone = async () => {
     try {
       if (localAudioTrack) {
+        // Just unmute existing track - don't recreate
         await localAudioTrack.unmute();
+        console.log('✅ Audio track unmuted');
       } else {
-        // Create audio track with mobile-optimized settings
+        // Only create new track if none exists
+        console.log('🎤 Creating new audio track...');
         const audioConstraints = {
-          sampleRate: 48000,
-          channelCount: 1,
           echoCancellation: true,
           noiseSuppression: true,
-          autoGainControl: true
+          autoGainControl: true,
+          // Mobile-friendly settings
+          sampleRate: { ideal: 48000 },
+          channelCount: { ideal: 1 }
         };
 
-        const track = await createLocalAudioTrack({
-          audio: audioConstraints
-        });
+        const track = await createLocalAudioTrack(audioConstraints);
 
         if (room?.localParticipant) {
           await room.localParticipant.publishTrack(track);
+          console.log('✅ Audio track published');
         }
         
         setLocalAudioTrack(track);
       }
       setIsAudioEnabled(true);
-      console.log('✅ Audio enabled successfully');
     } catch (error) {
       console.error('Failed to enable microphone:', error);
       setError(`Failed to enable microphone: ${error.message}`);
     }
   };
 
-  // Disable microphone
+  // Disable microphone - ONLY MUTE, don't destroy
   const disableMicrophone = async () => {
     try {
-      if (localAudioTrack && room?.localParticipant) {
-        // Stop and unpublish the track completely
-        await room.localParticipant.unpublishTrack(localAudioTrack);
-        localAudioTrack.stop();
-        setLocalAudioTrack(null);
+      if (localAudioTrack) {
+        // Only mute the track - keep it alive and published
+        await localAudioTrack.mute();
+        console.log('✅ Audio track muted (track preserved)');
       }
       setIsAudioEnabled(false);
-      console.log('✅ Audio disabled successfully');
     } catch (error) {
-      console.error('Failed to disable microphone:', error);
+      console.error('Failed to mute microphone:', error);
     }
   };
 
@@ -767,18 +774,39 @@ const LiveKitBellApp = () => {
           console.log('Attaching audio track for', participant.identity);
           track.attach(audioRef.current);
           
-          // Ensure audio plays and is not muted
+          // Browser-compliant audio setup
           const audioEl = audioRef.current;
           audioEl.autoplay = true;
+          audioEl.playsInline = true;
           audioEl.muted = false;
           audioEl.volume = 1.0;
           
-          // Force play for mobile compatibility
-          setTimeout(() => {
-            audioEl.play().catch(e => {
-              console.log('Audio play failed (this is normal on first load):', e);
-            });
-          }, 100);
+          // Respect browser autoplay policies
+          const playAudio = async () => {
+            try {
+              await audioEl.play();
+              console.log('✅ Remote audio playing for', participant.identity);
+            } catch (error) {
+              // This is expected on first load without user interaction
+              console.log('Audio autoplay blocked (normal):', error.message);
+              
+              // Add click listener to enable audio on user gesture
+              const enableAudioOnClick = async () => {
+                try {
+                  await audioEl.play();
+                  console.log('✅ Audio enabled after user interaction');
+                  document.removeEventListener('click', enableAudioOnClick);
+                } catch (e) {
+                  console.log('Audio play still failed:', e);
+                }
+              };
+              
+              document.addEventListener('click', enableAudioOnClick, { once: true });
+            }
+          };
+          
+          // Delay to ensure track is fully attached
+          setTimeout(playAudio, 100);
         }
       };
 
@@ -1099,6 +1127,19 @@ const LiveKitBellApp = () => {
               <Monitor className="w-5 h-5 text-white" />
             )}
           </button>
+
+          {/* Enable Audio button - shows when there are remote participants */}
+          {participants.size > 0 && (
+            <button
+              onClick={enableAllAudio}
+              className="p-3 rounded-full bg-green-600 hover:bg-green-500"
+              title="Enable audio for all participants (tap if you can't hear anyone)"
+            >
+              <div className="w-5 h-5 text-white font-bold text-xs flex items-center justify-center">
+                🔊
+              </div>
+            </button>
+          )}
 
           {/* Chat toggle button */}
           <button
