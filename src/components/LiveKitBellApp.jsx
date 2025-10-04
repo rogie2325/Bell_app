@@ -44,6 +44,7 @@ const LiveKitBellApp = () => {
   const [localVideoTrack, setLocalVideoTrack] = useState(null);
   const [localAudioTrack, setLocalAudioTrack] = useState(null);
   const [isConnecting, setIsConnecting] = useState(false);
+  const [audioContext, setAudioContext] = useState(null);
 
   // Refs
   const localVideoRef = useRef(null);
@@ -59,6 +60,26 @@ const LiveKitBellApp = () => {
   };
 
   useEffect(scrollToBottom, [messages]);
+
+  // Function to initialize and resume audio context
+  const initializeAudioContext = async () => {
+    if (audioContext && audioContext.state === 'running') {
+      console.log('🔊 Audio context already running');
+      return;
+    }
+
+    try {
+      const newAudioContext = new (window.AudioContext || window.webkitAudioContext)();
+      if (newAudioContext.state === 'suspended') {
+        console.log('🔊 Resuming suspended audio context');
+        await newAudioContext.resume();
+      }
+      setAudioContext(newAudioContext);
+      console.log('🔊 Audio context initialized and running:', newAudioContext.state);
+    } catch (error) {
+      console.error('🔊 Failed to initialize audio context:', error);
+    }
+  };
 
   // Generate access token by calling backend API
   const generateAccessToken = async (roomName, participantName) => {
