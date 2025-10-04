@@ -48,6 +48,28 @@ const LiveKitBellApp = () => {
 
   // Refs
   const localVideoRef = useRef(null);
+
+  // Enable all remote audio (for mobile compatibility)
+  const enableAllAudio = async () => {
+    console.log('🔊 Manually enabling all audio...');
+    
+    // Initialize audio context
+    const ctx = initializeAudioContext();
+    if (ctx && ctx.state === 'suspended') {
+      await ctx.resume();
+    }
+    
+    // Force play all audio elements
+    const audioElements = document.querySelectorAll('audio');
+    audioElements.forEach(audio => {
+      if (audio.srcObject) {
+        console.log('🔊 Playing audio element...');
+        audio.muted = false;
+        audio.volume = 1.0;
+        audio.play().catch(e => console.warn('Audio play failed:', e));
+      }
+    });
+  };
   const messagesEndRef = useRef(null);
 
   // LiveKit server configuration
@@ -482,10 +504,14 @@ const LiveKitBellApp = () => {
   // Disable microphone
   const disableMicrophone = async () => {
     try {
-      if (localAudioTrack) {
-        await localAudioTrack.mute();
+      if (localAudioTrack && room?.localParticipant) {
+        // Stop and unpublish the track completely
+        await room.localParticipant.unpublishTrack(localAudioTrack);
+        localAudioTrack.stop();
+        setLocalAudioTrack(null);
       }
       setIsAudioEnabled(false);
+      console.log('✅ Audio disabled successfully');
     } catch (error) {
       console.error('Failed to disable microphone:', error);
     }
@@ -630,7 +656,9 @@ const LiveKitBellApp = () => {
   // Render participant video
   const ParticipantVideo = ({ participant, isLocal = false }) => {
     const videoRef = useRef(null);
+    const audioRef = useRef(null);
     const [videoTrack, setVideoTrack] = useState(null);
+    const [audioTrack, setAudioTrack] = useState(null);
 
     // Debug logging
     useEffect(() => {
@@ -706,28 +734,92 @@ const LiveKitBellApp = () => {
         }
       };
 
+      // Audio track handling for remote participants
+      const updateAudioTrack = () => {
+        let track = null;
+        
+        console.log('Updating audio track for', participant.identity);
+        console.log('Audio tracks:', Array.from(participant.audioTrackPublications.values()).map(pub => ({
+          sid: pub.trackSid,
+          subscribed: pub.isSubscribed,
+          enabled: pub.isEnabled,
+          muted: pub.isMuted,
+          hasTrack: !!pub.track
+        })));
+
+        // Find first available audio track
+        for (const publication of participant.audioTrackPublications.values()) {
+          if (publication.isSubscribed && publication.track) {
+            track = publication.track;
+            break;
+          }
+        }
+
+        // Detach previous track
+        if (audioTrack && audioRef.current) {
+          audioTrack.detach(audioRef.current);
+        }
+        
+        setAudioTrack(track);
+        
+        // Attach new track
+        if (track && audioRef.current) {
+          console.log('Attaching audio track for', participant.identity);
+          track.attach(audioRef.current);
+          
+          // Ensure audio plays and is not muted
+          const audioEl = audioRef.current;
+          audioEl.autoplay = true;
+          audioEl.muted = false;
+          audioEl.volume = 1.0;
+          
+          // Force play for mobile compatibility
+          setTimeout(() => {
+            audioEl.play().catch(e => {
+              console.log('Audio play failed (this is normal on first load):', e);
+            });
+          }, 100);
+        }
+      };
+
       // Initial track setup
       updateVideoTrack();
+      updateAudioTrack();
 
       // Listen for track changes
       const handleTrackSubscribed = (track, publication, remoteParticipant) => {
-        if (remoteParticipant === participant && track.kind === Track.Kind.Video) {
-          console.log('Video track subscribed for', participant.identity);
-          updateVideoTrack();
+        if (remoteParticipant === participant) {
+          if (track.kind === Track.Kind.Video) {
+            console.log('Video track subscribed for', participant.identity);
+            updateVideoTrack();
+          } else if (track.kind === Track.Kind.Audio) {
+            console.log('Audio track subscribed for', participant.identity);
+            updateAudioTrack();
+          }
         }
       };
 
       const handleTrackUnsubscribed = (track, publication, remoteParticipant) => {
-        if (remoteParticipant === participant && track.kind === Track.Kind.Video) {
-          console.log('Video track unsubscribed for', participant.identity);
-          updateVideoTrack();
+        if (remoteParticipant === participant) {
+          if (track.kind === Track.Kind.Video) {
+            console.log('Video track unsubscribed for', participant.identity);
+            updateVideoTrack();
+          } else if (track.kind === Track.Kind.Audio) {
+            console.log('Audio track unsubscribed for', participant.identity);
+            updateAudioTrack();
+          }
         }
       };
 
       const handleTrackPublished = (publication, remoteParticipant) => {
-        if (remoteParticipant === participant && publication.kind === Track.Kind.Video) {
-          console.log('Video track published for', participant.identity);
-          updateVideoTrack();
+        if (remoteParticipant === participant) {
+          if (publication.kind === Track.Kind.Video) {
+            console.log('Video track published for', participant.identity);
+            updateVideoTrack();
+          } else if (publication.kind === Track.Kind.Audio) {
+            console.log('Audio track published for', participant.identity);
+            updateAudioTrack();
+          }
         }
       };
 
@@ -741,6 +833,9 @@ const LiveKitBellApp = () => {
         if (videoTrack && videoRef.current) {
           videoTrack.detach(videoRef.current);
         }
+        if (audioTrack && audioRef.current) {
+          audioTrack.detach(audioRef.current);
+        }
         room?.off(RoomEvent.TrackSubscribed, handleTrackSubscribed);
         room?.off(RoomEvent.TrackUnsubscribed, handleTrackUnsubscribed);
         room?.off(RoomEvent.TrackPublished, handleTrackPublished);
@@ -751,6 +846,24 @@ const LiveKitBellApp = () => {
 
     return (
       <div className="relative aspect-video bg-gray-900 rounded-lg overflow-hidden min-h-[200px]">
+        {/* Hidden audio element for remote audio playback */}
+        {!isLocal && (
+          <audio
+            ref={audioRef}
+            autoPlay
+            playsInline
+            muted={false}
+            volume={1.0}
+            style={{ display: 'none' }}
+            onLoadedMetadata={() => {
+              console.log('Audio metadata loaded for', participant?.identity);
+              if (audioRef.current) {
+                audioRef.current.play().catch(e => console.log('Auto-play prevented:', e));
+              }
+            }}
+          />
+        )}
+        
         {hasVideo ? (
           <video
             ref={isLocal ? localVideoRef : videoRef}
@@ -868,6 +981,15 @@ const LiveKitBellApp = () => {
             className="bg-red-600 hover:bg-red-700 text-white p-2 rounded-lg"
           >
             <PhoneOff className="w-5 h-5" />
+          </button>
+
+          {/* Enable Audio Button - especially useful for mobile */}
+          <button
+            onClick={enableAllAudio}
+            className="bg-green-600 hover:bg-green-700 text-white p-2 rounded-lg"
+            title="Enable all audio (fixes mobile audio issues)"
+          >
+            🔊
           </button>
         </div>
       </div>
