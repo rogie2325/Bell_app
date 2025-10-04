@@ -4,7 +4,7 @@ import {
   VideoConference,
   formatChatMessageLinks,
 } from '@livekit/components-react';
-import '@livekit/components-styles/styles.css';
+import '@livekit/components-styles';
 
 const LiveKitVideoConference = ({ 
   roomUrl, 

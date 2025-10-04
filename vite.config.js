@@ -14,6 +14,9 @@ export default defineConfig({
       },
     },
   },
+  optimizeDeps: {
+    include: ['@livekit/components-react', '@livekit/components-styles']
+  },
   server: {
     host: '0.0.0.0',
     port: 5173,
