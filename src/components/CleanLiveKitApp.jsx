@@ -15,7 +15,7 @@ import {
 import { DotLottieReact } from '@lottiefiles/dotlottie-react';
 import InstallPrompt from './InstallPrompt';
 
-const WorkingLiveKitApp = () => {
+const CleanLiveKitApp = () => {
   // State
   const [isConnected, setIsConnected] = useState(false);
   const [roomId, setRoomId] = useState('');
@@ -276,65 +276,105 @@ const WorkingLiveKitApp = () => {
 
   // Disconnect from room
   const disconnectFromRoom = async () => {
-    if (room) {
-      await room.disconnect();
-    }
-    
-    // Clean up tracks
-    if (localVideoTrack) {
-      localVideoTrack.stop();
-      setLocalVideoTrack(null);
-    }
-    if (localAudioTrack) {
-      localAudioTrack.stop();
-      setLocalAudioTrack(null);
-    }
+    try {
+      console.log('📞 Disconnecting from room...');
+      
+      // Disconnect from LiveKit room
+      if (room) {
+        await room.disconnect();
+        console.log('✅ Disconnected from LiveKit room');
+      }
+      
+      // Clean up local tracks
+      if (localVideoTrack) {
+        localVideoTrack.stop();
+        setLocalVideoTrack(null);
+        console.log('🎥 Local video track stopped');
+      }
+      if (localAudioTrack) {
+        localAudioTrack.stop();
+        setLocalAudioTrack(null);
+        console.log('🎤 Local audio track stopped');
+      }
 
-    setIsConnected(false);
-    setRoom(null);
+      // Reset state
+      setIsConnected(false);
+      setRoom(null);
+      setParticipants([]);
+      setIsVideoEnabled(true);
+      setIsAudioEnabled(true);
+      setError('');
+      
+      console.log('✅ Successfully disconnected');
+    } catch (error) {
+      console.error('❌ Disconnect failed:', error);
+      // Force reset state even if disconnect fails
+      setIsConnected(false);
+      setRoom(null);
+      setParticipants([]);
+    }
   };
 
   // Toggle video
   const toggleVideo = async () => {
-    if (localVideoTrack) {
-      if (isVideoEnabled) {
-        localVideoTrack.mute();
-      } else {
-        localVideoTrack.unmute();
+    if (localVideoTrack && room) {
+      try {
+        if (isVideoEnabled) {
+          await localVideoTrack.mute();
+          console.log('📹 Video muted');
+        } else {
+          await localVideoTrack.unmute();
+          console.log('📹 Video unmuted');
+        }
+        setIsVideoEnabled(!isVideoEnabled);
+      } catch (error) {
+        console.error('❌ Video toggle failed:', error);
       }
-      setIsVideoEnabled(!isVideoEnabled);
     }
   };
 
   // Toggle audio
   const toggleAudio = async () => {
-    if (localAudioTrack) {
-      if (isAudioEnabled) {
-        localAudioTrack.mute();
-      } else {
-        localAudioTrack.unmute();
+    if (localAudioTrack && room) {
+      try {
+        if (isAudioEnabled) {
+          await localAudioTrack.mute();
+          console.log('🎤 Audio muted');
+        } else {
+          await localAudioTrack.unmute();
+          console.log('🎤 Audio unmuted');
+        }
+        setIsAudioEnabled(!isAudioEnabled);
+      } catch (error) {
+        console.error('❌ Audio toggle failed:', error);
       }
-      setIsAudioEnabled(!isAudioEnabled);
     }
   };
 
   // Flip camera (front/back) - mobile only
   const flipCamera = async () => {
-    if (!room || !localVideoTrack) return;
+    if (!room || !localVideoTrack) {
+      console.log('❌ Cannot flip camera: missing room or video track');
+      return;
+    }
 
     try {
       console.log('🔄 Flipping camera...');
       const isMobile = /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
       
       if (!isMobile) {
-        console.log('Camera flip only available on mobile devices');
+        console.log('📱 Camera flip only available on mobile devices');
         return;
       }
 
       // Toggle between front ('user') and back ('environment') camera
       const newFacingMode = facingMode === 'user' ? 'environment' : 'user';
-      console.log('Switching from', facingMode, 'to', newFacingMode);
+      console.log('📹 Switching from', facingMode, 'to', newFacingMode);
 
+      // First unpublish the current track
+      await room.localParticipant.unpublishTrack(localVideoTrack);
+      console.log('📡 Unpublished current video track');
+      
       // Stop current video track
       localVideoTrack.stop();
       
@@ -346,15 +386,17 @@ const WorkingLiveKitApp = () => {
         frameRate: { ideal: 15, max: 30 }
       };
 
+      console.log('📹 Creating new video track with constraints:', videoConstraints);
       const newVideoTrack = await createLocalVideoTrack(videoConstraints);
 
-      // Replace the track in the room
-      await room.localParticipant.unpublishTrack(localVideoTrack);
+      // Publish the new track
       await room.localParticipant.publishTrack(newVideoTrack);
+      console.log('📡 Published new video track');
 
       // Update local video element
       if (localVideoRef.current) {
         newVideoTrack.attach(localVideoRef.current);
+        console.log('🔌 Attached new video track to element');
       }
 
       // Update state
@@ -813,4 +855,36 @@ const WorkingLiveKitApp = () => {
   );
 };
 
-export default WorkingLiveKitApp;
+// Add required CSS animations
+const style = document.createElement('style');
+style.textContent = `
+  @keyframes scroll-down {
+    0% { transform: translateY(-100vh); }
+    100% { transform: translateY(100vh); }
+  }
+  @keyframes scroll-up {
+    0% { transform: translateY(100vh); }
+    100% { transform: translateY(-100vh); }
+  }
+  @keyframes scroll-down-slow {
+    0% { transform: translateY(-100vh); }
+    100% { transform: translateY(100vh); }
+  }
+  @keyframes scroll-up-slow {
+    0% { transform: translateY(100vh); }
+    100% { transform: translateY(-100vh); }
+  }
+  .animate-scroll-down { animation: scroll-down 25s linear infinite; }
+  .animate-scroll-up { animation: scroll-up 30s linear infinite; }
+  .animate-scroll-down-slow { animation: scroll-down-slow 35s linear infinite; }
+  .animate-scroll-up-slow { animation: scroll-up-slow 40s linear infinite; }
+  
+  /* Ensure smooth rendering */
+  * {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+`;
+document.head.appendChild(style);
+
+export default CleanLiveKitApp;
