@@ -1,8 +1,13 @@
-import SimpleLiveKitApp from './components/SimpleLiveKitApp'
-import './App.css'
+// Updated code to reference CleanLiveKitApp
+import React from 'react';
+import CleanLiveKitApp from './CleanLiveKitApp';
 
-function App() {
-  return <SimpleLiveKitApp />
-}
+const App = () => {
+    return (
+        <div>
+            <CleanLiveKitApp />
+        </div>
+    );
+};
 
-export default App
+export default App;
