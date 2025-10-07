@@ -1,12 +1,14 @@
 {
   "name": "Bell Video Calling App",
   "short_name": "Bell",
-  "description": "Video calling app with chat and screen sharing",
+  "description": "Connect with friends through high-quality video calls with Bell",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#1f2937",
   "theme_color": "#3b82f6",
   "orientation": "portrait-primary",
+  "scope": "/",
+  "lang": "en-US",
   "icons": [
     {
       "src": "/android-chrome-192x192.png",

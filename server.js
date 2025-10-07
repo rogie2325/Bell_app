@@ -1,10 +1,10 @@
-﻿import 'dotenv/config';
+import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import { AccessToken } from 'livekit-server-sdk';
 
 const app = express();
-const PORT = process.env.PORT || 3003;
+const PORT = process.env.PORT || 3001;
 
 app.use(cors());
 app.use(express.json());
@@ -40,9 +40,6 @@ app.post('/api/token', async (req, res) => {
     });
 
     const token = await at.toJwt();
-    console.log('Generated token:', token);
-    console.log('Token type:', typeof token);
-    console.log('Token length:', token ? token.length : 'null/undefined');
     
     res.json({ token });
 
