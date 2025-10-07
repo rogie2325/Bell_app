@@ -36,16 +36,16 @@ const WorkingLiveKitApp = () => {
   // Refs
   const localVideoRef = useRef(null);
 
-  // Backend URL - detect if we're on localhost or ngrok  
-  const BACKEND_URL = window.location.hostname === 'localhost' ? 
-    'http://localhost:3001' : 
-    window.location.origin;
+  // Backend URL - use current origin (works for both localhost and ngrok)
+  const BACKEND_URL = window.location.origin;
   const LIVEKIT_URL = import.meta.env.VITE_LIVEKIT_URL || 'wss://belllive-9f7u9uab.livekit.cloud';
   
   console.log('🔧 Frontend Config:');
   console.log('Backend URL:', BACKEND_URL);
   console.log('LiveKit URL:', LIVEKIT_URL);
   console.log('Environment VITE_LIVEKIT_URL:', import.meta.env.VITE_LIVEKIT_URL);
+  console.log('Current hostname:', window.location.hostname);
+  console.log('Current origin:', window.location.origin);
 
   // Initialize audio context for mobile
   const initializeAudioContext = () => {

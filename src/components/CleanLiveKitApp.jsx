@@ -22,7 +22,7 @@ import InstallPrompt from './InstallPrompt';
 
 // Configuration
 const LIVEKIT_URL = import.meta.env.VITE_LIVEKIT_URL || 'wss://belllive-9f7u9uab.livekit.cloud';
-const SERVER_URL = import.meta.env.VITE_SERVER_URL || 'http://localhost:3001';
+const SERVER_URL = window.location.origin; // Use current origin (works for both localhost and ngrok)
 
 // Room Component using LiveKit official components following best practices
 const VideoRoom = ({ token, onDisconnect }) => {
@@ -189,14 +189,14 @@ const LiveKitBellApp = () => {
             <h2 className="text-xl font-semibold text-center mb-4">Join a Room</h2>
             
             <div>
-              <label className="block text-sm font-medium mb-2">Room Name</label>
+              <label className="block text-sm font-medium mb-2">Room ID</label>
               <input
                 type="text"
                 value={roomName}
                 onChange={(e) => setRoomName(e.target.value)}
                 onKeyPress={(e) => e.key === 'Enter' && connectToRoom()}
                 className="w-full px-4 py-3 bg-white/20 border border-white/30 rounded-lg text-white placeholder-white/60 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                placeholder="Enter room name"
+                placeholder="Enter room ID (e.g. 123)"
                 disabled={isConnecting}
               />
             </div>

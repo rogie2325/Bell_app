@@ -2,12 +2,26 @@ import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import { AccessToken } from 'livekit-server-sdk';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-app.use(cors());
+// Configure CORS to allow ngrok and localhost
+app.use(cors({
+  origin: true, // Allow all origins (including ngrok URLs)
+  credentials: true,
+  methods: ['GET', 'POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
 app.use(express.json());
+
+// Serve static files from dist folder (for production/mobile access)
+app.use(express.static(join(__dirname, 'dist')));
 
 const LIVEKIT_API_KEY = process.env.LIVEKIT_API_KEY;
 const LIVEKIT_SECRET = process.env.LIVEKIT_SECRET;
@@ -49,6 +63,13 @@ app.post('/api/token', async (req, res) => {
   }
 });
 
+// Serve the React app for all other routes (for mobile/production)
+app.get('*', (req, res) => {
+  res.sendFile(join(__dirname, 'dist', 'index.html'));
+});
+
 app.listen(PORT, () => {
   console.log('Server on port', PORT);
+  console.log('Serving frontend from dist folder');
+  console.log('API available at /api/token');
 });
