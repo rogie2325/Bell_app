@@ -1,10 +1,10 @@
 import React from 'react';
-import CleanLiveKitApp from './CleanLiveKitApp';
+import SimpleLiveKitApp from './components/SimpleLiveKitApp';
 
 const App = () => {
     return (
         <div>
-            <CleanLiveKitApp />
+            <SimpleLiveKitApp />
         </div>
     );
 };
