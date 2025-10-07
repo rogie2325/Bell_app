@@ -1,8 +1,12 @@
-import CleanLiveKitApp from './components/CleanLiveKitApp'
-import './App.css'
+import React from 'react';
+import CleanLiveKitApp from './CleanLiveKitApp';
 
-function App() {
-  return <CleanLiveKitApp />
-}
+const App = () => {
+    return (
+        <div>
+            <CleanLiveKitApp />
+        </div>
+    );
+};
 
-export default App
+export default App;
