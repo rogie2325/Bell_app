@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   Camera, Mic, MicOff, Video, VideoOff, Phone, Users, MessageCircle, 
-  Settings, Send, X, PhoneOff, User, RotateCcw
+  Settings, Send, X, PhoneOff, User, RotateCcw, Monitor, MonitorOff, Music
 } from 'lucide-react';
 import {
   Room,
@@ -21,6 +21,8 @@ const WorkingLiveKitApp = () => {
   const [participants, setParticipants] = useState([]);
   const [isVideoEnabled, setIsVideoEnabled] = useState(true);
   const [isAudioEnabled, setIsAudioEnabled] = useState(true);
+  const [isSharingSystemAudio, setIsSharingSystemAudio] = useState(false);
+  const [systemAudioTrack, setSystemAudioTrack] = useState(null);
   const [error, setError] = useState('');
   const [isConnecting, setIsConnecting] = useState(false);
   const [audioContext, setAudioContext] = useState(null);
@@ -34,7 +36,7 @@ const WorkingLiveKitApp = () => {
   // Refs
   const localVideoRef = useRef(null);
 
-  // Backend URL - detect if we're on localhost or ngrok
+  // Backend URL - detect if we're on localhost or ngrok  
   const BACKEND_URL = window.location.hostname === 'localhost' ? 
     'http://localhost:3001' : 
     window.location.origin;
@@ -125,7 +127,11 @@ const WorkingLiveKitApp = () => {
       }
 
       const { token } = await response.json();
-      console.log('✅ Token received');
+      console.log('✅ Token received:', token);
+      console.log('Token type:', typeof token);
+      if (typeof token !== 'string') {
+        throw new Error('Token from backend is not a string. Check backend response.');
+      }
 
       // Create room instance
       const newRoom = new Room();
@@ -289,6 +295,11 @@ const WorkingLiveKitApp = () => {
       localAudioTrack.stop();
       setLocalAudioTrack(null);
     }
+    if (systemAudioTrack) {
+      systemAudioTrack.stop();
+      setSystemAudioTrack(null);
+      setIsSharingSystemAudio(false);
+    }
 
     setIsConnected(false);
     setRoom(null);
@@ -315,6 +326,48 @@ const WorkingLiveKitApp = () => {
         localAudioTrack.unmute();
       }
       setIsAudioEnabled(!isAudioEnabled);
+    }
+  };
+
+  // Share system audio via getDisplayMedia (audio only) as a fallback while server publisher is worked out
+  const shareSystemAudio = async () => {
+    if (!room) {
+      setError('Not connected to a room');
+      return;
+    }
+
+    try {
+      // If already sharing, stop
+      if (isSharingSystemAudio) {
+        if (systemAudioTrack) {
+          await room.localParticipant.unpublishTrack(systemAudioTrack);
+          systemAudioTrack.stop();
+          setSystemAudioTrack(null);
+        }
+        setIsSharingSystemAudio(false);
+        return;
+      }
+
+      // Request display media with audio; browser will ask user to pick a window or tab with audio
+      const stream = await navigator.mediaDevices.getDisplayMedia({ audio: true, video: false });
+      const track = stream.getAudioTracks()[0];
+      if (!track) throw new Error('No audio track available from getDisplayMedia');
+
+      // Publish track to LiveKit room
+      await room.localParticipant.publishTrack(track, { name: 'system-audio', source: 'screen_share_audio' });
+      setSystemAudioTrack(track);
+      setIsSharingSystemAudio(true);
+
+      // When the user stops sharing from browser UI, clean up
+      track.onended = async () => {
+        try { await room.localParticipant.unpublishTrack(track); } catch (e) {}
+        setSystemAudioTrack(null);
+        setIsSharingSystemAudio(false);
+      };
+    } catch (e) {
+      console.error('shareSystemAudio failed', e);
+      setError('Failed to share system audio: ' + (e.message || e));
+      setIsSharingSystemAudio(false);
     }
   };
 
@@ -631,6 +684,17 @@ const WorkingLiveKitApp = () => {
               }`}
             >
               {isAudioEnabled ? <Mic size={20} /> : <MicOff size={20} />}
+            </button>
+
+            {/* System audio share button */}
+            <button
+              onClick={shareSystemAudio}
+              className={`p-3 rounded-full transition-colors ${
+                isSharingSystemAudio ? 'bg-green-500 text-white' : 'bg-white/20 text-white'
+              }`}
+              title={isSharingSystemAudio ? 'Stop sharing system audio' : 'Share system audio (tab/window)'}
+            >
+              <Music size={20} />
             </button>
 
             {/* Camera flip button - mobile only */}
