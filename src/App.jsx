@@ -1,8 +1,8 @@
-import CleanLiveKitApp from './components/CleanLiveKitApp'
+import SimpleLiveKitApp from './components/SimpleLiveKitApp'
 import './App.css'
 
 function App() {
-  return <CleanLiveKitApp />
+  return <SimpleLiveKitApp />
 }
 
 export default App

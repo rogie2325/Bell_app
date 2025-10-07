@@ -15,7 +15,7 @@ import {
 import { DotLottieReact } from '@lottiefiles/dotlottie-react';
 import InstallPrompt from './InstallPrompt';
 
-const CleanLiveKitApp = () => {
+const WorkingLiveKitApp = () => {
   // State
   const [isConnected, setIsConnected] = useState(false);
   const [roomId, setRoomId] = useState('');
@@ -275,106 +275,107 @@ const CleanLiveKitApp = () => {
   };
 
   // Disconnect from room
-  const disconnectFromRoom = async () => {
-    try {
-      console.log('📞 Disconnecting from room...');
-      
-      // Disconnect from LiveKit room
-      if (room) {
-        await room.disconnect();
-        console.log('✅ Disconnected from LiveKit room');
-      }
-      
-      // Clean up local tracks
-      if (localVideoTrack) {
-        localVideoTrack.stop();
-        setLocalVideoTrack(null);
-        console.log('🎥 Local video track stopped');
-      }
-      if (localAudioTrack) {
-        localAudioTrack.stop();
-        setLocalAudioTrack(null);
-        console.log('🎤 Local audio track stopped');
-      }
-
-      // Reset state
-      setIsConnected(false);
-      setRoom(null);
-      setParticipants([]);
-      setIsVideoEnabled(true);
-      setIsAudioEnabled(true);
-      setError('');
-      
-      console.log('✅ Successfully disconnected');
-    } catch (error) {
-      console.error('❌ Disconnect failed:', error);
-      // Force reset state even if disconnect fails
-      setIsConnected(false);
-      setRoom(null);
-      setParticipants([]);
+  const disconnectFromRoom = async (e) => {
+    e?.preventDefault();
+    e?.stopPropagation();
+    
+    console.log('📞 Disconnecting from room...');
+    
+    // Haptic feedback on mobile
+    if (navigator.vibrate) {
+      navigator.vibrate([100, 50, 100]);
     }
+    
+    if (room) {
+      await room.disconnect();
+    }
+    
+    // Clean up tracks
+    if (localVideoTrack) {
+      localVideoTrack.stop();
+      setLocalVideoTrack(null);
+    }
+    if (localAudioTrack) {
+      localAudioTrack.stop();
+      setLocalAudioTrack(null);
+    }
+
+    setIsConnected(false);
+    setRoom(null);
+    console.log('✅ Disconnected successfully');
   };
 
   // Toggle video
-  const toggleVideo = async () => {
-    if (localVideoTrack && room) {
-      try {
-        if (isVideoEnabled) {
-          await localVideoTrack.mute();
-          console.log('📹 Video muted');
-        } else {
-          await localVideoTrack.unmute();
-          console.log('📹 Video unmuted');
-        }
-        setIsVideoEnabled(!isVideoEnabled);
-      } catch (error) {
-        console.error('❌ Video toggle failed:', error);
+  const toggleVideo = async (e) => {
+    e?.preventDefault();
+    e?.stopPropagation();
+    
+    console.log('📹 Toggling video...');
+    if (localVideoTrack) {
+      if (isVideoEnabled) {
+        localVideoTrack.mute();
+        console.log('📹 Video muted');
+      } else {
+        localVideoTrack.unmute();
+        console.log('📹 Video unmuted');
+      }
+      setIsVideoEnabled(!isVideoEnabled);
+      
+      // Haptic feedback on mobile
+      if (navigator.vibrate) {
+        navigator.vibrate(50);
       }
     }
   };
 
   // Toggle audio
-  const toggleAudio = async () => {
-    if (localAudioTrack && room) {
-      try {
-        if (isAudioEnabled) {
-          await localAudioTrack.mute();
-          console.log('🎤 Audio muted');
-        } else {
-          await localAudioTrack.unmute();
-          console.log('🎤 Audio unmuted');
-        }
-        setIsAudioEnabled(!isAudioEnabled);
-      } catch (error) {
-        console.error('❌ Audio toggle failed:', error);
+  const toggleAudio = async (e) => {
+    e?.preventDefault();
+    e?.stopPropagation();
+    
+    console.log('🎤 Toggling audio...');
+    if (localAudioTrack) {
+      if (isAudioEnabled) {
+        localAudioTrack.mute();
+        console.log('🎤 Audio muted');
+      } else {
+        localAudioTrack.unmute();
+        console.log('🎤 Audio unmuted');
+      }
+      setIsAudioEnabled(!isAudioEnabled);
+      
+      // Haptic feedback on mobile
+      if (navigator.vibrate) {
+        navigator.vibrate(50);
       }
     }
   };
 
   // Flip camera (front/back) - mobile only
-  const flipCamera = async () => {
-    if (!room || !localVideoTrack) {
-      console.log('❌ Cannot flip camera: missing room or video track');
-      return;
-    }
+  const flipCamera = async (e) => {
+    e?.preventDefault();
+    e?.stopPropagation();
+    
+    if (!room || !localVideoTrack) return;
 
     try {
       console.log('🔄 Flipping camera...');
       const isMobile = /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
       
       if (!isMobile) {
-        console.log('📱 Camera flip only available on mobile devices');
+        console.log('Camera flip only available on mobile devices');
         return;
+      }
+
+      // Haptic feedback on mobile
+      if (navigator.vibrate) {
+        navigator.vibrate(100);
       }
 
       // Toggle between front ('user') and back ('environment') camera
       const newFacingMode = facingMode === 'user' ? 'environment' : 'user';
-      console.log('📹 Switching from', facingMode, 'to', newFacingMode);
+      console.log('Switching from', facingMode, 'to', newFacingMode);
 
-      // First unpublish the current track
-      await room.localParticipant.unpublishTrack(localVideoTrack);
-      console.log('📡 Unpublished current video track');
-      
       // Stop current video track
       localVideoTrack.stop();
       
@@ -386,17 +387,15 @@ const CleanLiveKitApp = () => {
         frameRate: { ideal: 15, max: 30 }
       };
 
-      console.log('📹 Creating new video track with constraints:', videoConstraints);
       const newVideoTrack = await createLocalVideoTrack(videoConstraints);
 
-      // Publish the new track
+      // Replace the track in the room
+      await room.localParticipant.unpublishTrack(localVideoTrack);
       await room.localParticipant.publishTrack(newVideoTrack);
-      console.log('📡 Published new video track');
 
       // Update local video element
       if (localVideoRef.current) {
         newVideoTrack.attach(localVideoRef.current);
-        console.log('🔌 Attached new video track to element');
       }
 
       // Update state
@@ -495,13 +494,20 @@ const CleanLiveKitApp = () => {
             className="w-full h-full object-cover"
           />
         ) : (
-          <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-gray-800 to-gray-900">
-            <div className="text-center text-white">
-              <User size={isSmall ? 20 : 48} className="mx-auto mb-1 opacity-70" />
+          <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-gray-800 to-gray-900 relative">
+            {/* Pulsing border animation */}
+            <div className="absolute inset-0 rounded-lg border-2 border-blue-400/30 animate-pulse"></div>
+            
+            <div className="text-center text-white relative z-10">
+              <div className="relative inline-block">
+                <User size={isSmall ? 32 : 64} className="mx-auto mb-2 opacity-70" />
+                {/* Pulsing ring around icon */}
+                <div className="absolute inset-0 rounded-full border-2 border-blue-400/50 animate-ping"></div>
+              </div>
               {!isSmall && (
                 <>
-                  <div className="text-lg font-medium">{participant.name}</div>
-                  <div className="text-sm text-white/60">Camera off</div>
+                  <div className="text-lg font-medium mt-2">{participant.name}</div>
+                  <div className="text-sm text-white/60">Camera Off</div>
                 </>
               )}
             </div>
@@ -658,76 +664,79 @@ const CleanLiveKitApp = () => {
           </div>
         </div>
       ) : (
-        // Video call interface - compact layout with bottom spacing
-        <div className="w-full max-w-6xl mx-auto h-full flex flex-col relative pb-24">
-          {/* Main video area with Yubo-style compact layout */}
-          <div className="flex-1 relative overflow-hidden">
-            {/* Compact video grid - Yubo style with better spacing */}
-            <div className="h-full p-4 flex flex-col space-y-4">
+        // Video call interface - Side-by-side layout like screenshot
+        <div className="w-full h-screen flex flex-col relative">
+          {/* Main video area */}
+          <div className="flex-1 relative overflow-hidden pb-32 md:pb-24">
+            
+            {/* Desktop: Side-by-side grid, Mobile: Vertical stack */}
+            <div className="h-full p-2 md:p-4 flex flex-col md:flex-row md:items-center md:justify-center gap-2 md:gap-4">
               
-              {/* Main video section - compact size */}
-              <div className="flex-1 max-h-[60vh] min-h-[300px] max-w-4xl mx-auto">
-                {participants.length > 0 ? (
-                  /* When there are participants, show main participant video larger */
-                  <div className="h-full rounded-2xl overflow-hidden shadow-xl">
-                    <RemoteParticipantVideo participant={participants[0]} />
-                  </div>
-                ) : (
-                  /* When alone, show local video in main area */
-                  <div className="relative bg-gradient-to-br from-blue-900/30 to-purple-900/30 rounded-2xl overflow-hidden shadow-xl h-full">
-                    <video
-                      ref={localVideoRef}
-                      autoPlay
-                      playsInline
-                      muted
-                      className="w-full h-full object-cover"
-                    />
-                    <div className="absolute bottom-4 left-4 bg-black/70 backdrop-blur-sm text-white px-3 py-2 rounded-full text-sm font-medium">
-                      You {!isVideoEnabled && '(Video Off)'}
-                    </div>
-                    {!isVideoEnabled && (
-                      <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
-                        <div className="text-center text-white">
-                          <VideoOff size={48} className="mx-auto mb-2 opacity-50" />
-                          <div className="text-sm">Video Off</div>
+              {/* Local video */}
+              <div className="relative bg-gradient-to-br from-blue-900/30 to-purple-900/30 rounded-xl md:rounded-2xl overflow-hidden shadow-xl flex-1 md:max-w-md h-48 md:h-96">
+                <video
+                  ref={localVideoRef}
+                  autoPlay
+                  playsInline
+                  muted
+                  className="w-full h-full object-cover"
+                />
+                <div className="absolute bottom-2 md:bottom-4 left-2 md:left-4 bg-black/70 backdrop-blur-sm text-white px-2 md:px-3 py-1 md:py-2 rounded-full text-xs md:text-sm font-medium">
+                  {username || 'You'}
+                </div>
+                {!isVideoEnabled && (
+                  <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
+                    <div className="text-center text-white relative">
+                      {/* Pulsing border animation */}
+                      <div className="absolute inset-0 rounded-xl border-2 border-blue-400/30 animate-pulse"></div>
+                      
+                      <div className="relative z-10">
+                        <div className="relative inline-block">
+                          <VideoOff size={40} className="md:w-16 md:h-16 mx-auto mb-2 opacity-70" />
+                          {/* Pulsing ring around icon */}
+                          <div className="absolute inset-0 rounded-full border-2 border-blue-400/50 animate-ping"></div>
                         </div>
+                        <div className="text-sm md:text-base font-medium mt-2">Camera Off</div>
                       </div>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              {/* Bottom row - bigger thumbnails */}
-              <div className="flex space-x-3 h-32">
-                
-                {participants.length > 0 && (
-                  /* Local video thumbnail when others are present - bigger */
-                  <div className="relative bg-gradient-to-br from-blue-900/30 to-purple-900/30 rounded-xl overflow-hidden shadow-lg w-32 flex-shrink-0">
-                    <video
-                      ref={localVideoRef}
-                      autoPlay
-                      playsInline
-                      muted
-                      className="w-full h-full object-cover"
-                    />
-                    <div className="absolute bottom-2 left-2 bg-black/70 text-white px-2 py-1 rounded text-sm font-medium">
-                      You
                     </div>
-                    {!isVideoEnabled && (
-                      <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
-                        <VideoOff size={24} className="text-white opacity-50" />
-                      </div>
-                    )}
                   </div>
                 )}
-
-                {/* Additional participants as medium thumbnails */}
-                {participants.slice(1).map((participant, index) => (
-                  <div key={participant.sid} className="w-32 flex-shrink-0 h-32 rounded-xl overflow-hidden shadow-lg">
-                    <RemoteParticipantVideo participant={participant} isSmall={true} />
-                  </div>
-                ))}
               </div>
+
+              {/* Remote participants - show first participant or placeholder */}
+              {participants.length > 0 ? (
+                <div className="flex-1 md:max-w-md h-48 md:h-96 rounded-xl md:rounded-2xl overflow-hidden shadow-xl">
+                  <RemoteParticipantVideo participant={participants[0]} />
+                </div>
+              ) : (
+                <div className="relative bg-gradient-to-br from-purple-900/30 to-pink-900/30 rounded-xl md:rounded-2xl overflow-hidden shadow-xl flex-1 md:max-w-md h-48 md:h-96 flex items-center justify-center">
+                  <div className="text-center text-white relative">
+                    {/* Pulsing border */}
+                    <div className="absolute inset-0 rounded-xl border-2 border-purple-400/30 animate-pulse"></div>
+                    
+                    <div className="relative z-10">
+                      <div className="relative inline-block">
+                        <User size={40} className="md:w-16 md:h-16 mx-auto mb-2 opacity-50" />
+                        {/* Pulsing ring */}
+                        <div className="absolute inset-0 rounded-full border-2 border-purple-400/50 animate-ping"></div>
+                      </div>
+                      <div className="text-sm md:text-base font-medium mt-2">Waiting for others...</div>
+                      <div className="text-xs md:text-sm text-white/60">Camera Off</div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Additional participants - show as smaller thumbnails */}
+              {participants.length > 1 && (
+                <div className="flex md:flex-col gap-2 overflow-x-auto md:overflow-visible">
+                  {participants.slice(1, 3).map((participant) => (
+                    <div key={participant.sid} className="w-24 h-24 md:w-32 md:h-32 flex-shrink-0 rounded-lg md:rounded-xl overflow-hidden shadow-lg">
+                      <RemoteParticipantVideo participant={participant} isSmall={true} />
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
             
             {/* Room info */}
@@ -739,112 +748,71 @@ const CleanLiveKitApp = () => {
                 <div className="text-xs text-white/70">{participants.length + 1} online</div>
               </div>
             </div>
-
-            {/* Mobile audio enabler */}
-            {participants.length > 0 && (
-              <div className="absolute top-4 right-4">
-                <button
-                  onClick={async () => {
-                    console.log('🔊 Manually enabling audio...');
-                    
-                    // Resume audio context
-                    const ctx = initializeAudioContext();
-                    if (ctx && ctx.state === 'suspended') {
-                      await ctx.resume();
-                    }
-
-                    // Force play all remote audio elements
-                    participants.forEach((participant, index) => {
-                      const audioElements = document.querySelectorAll('audio');
-                      audioElements.forEach(audio => {
-                        if (audio.srcObject) {
-                          console.log('🔊 Playing audio element...');
-                          audio.play().catch(e => console.warn('Audio play failed:', e));
-                        }
-                      });
-                    });
-                  }}
-                  className="bg-blue-500/80 backdrop-blur-md hover:bg-blue-600/80 text-white px-4 py-2 rounded-xl text-sm font-medium shadow-lg transition-all"
-                >
-                  🔊 Enable Audio
-                </button>
-              </div>
-            )}
           </div>
 
-          {/* iOS-style Glassmorphic Controls Overlay */}
-          <div 
-            className="absolute inset-0 pointer-events-none group/controls"
-            onTouchStart={() => {}} // Enable touch events for mobile
-          >
-            {/* Glassmorphic control panel - always visible with proper spacing */}
-            <div id="control-panel" className="absolute bottom-12 left-1/2 transform -translate-x-1/2 pointer-events-auto opacity-100 transition-all duration-300 ease-out">
-              <div className="bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl p-4 shadow-2xl">
-                <div className="flex items-center space-x-4">
+          {/* iOS-style Glassmorphic Controls - Fixed at bottom, always visible */}
+          <div className="fixed bottom-0 left-0 right-0 pb-safe pb-6 md:pb-8 pointer-events-none z-50">
+            <div className="max-w-6xl mx-auto px-4 pointer-events-auto">
+              <div className="bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl md:rounded-3xl p-3 md:p-4 shadow-2xl mx-auto w-fit">
+                <div className="flex items-center justify-center space-x-3 md:space-x-4">
                   <button
-                    onClick={toggleVideo}
-                    className={`p-4 rounded-2xl transition-all duration-200 ${
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      toggleVideo(e);
+                    }}
+                    className={`p-3 md:p-4 rounded-xl md:rounded-2xl transition-all duration-200 ${
                       isVideoEnabled 
-                        ? 'bg-white/20 text-white hover:bg-white/30' 
-                        : 'bg-red-500/80 text-white hover:bg-red-500'
-                    } backdrop-blur-sm border border-white/10 hover:border-white/30 hover:scale-105`}
+                        ? 'bg-white/20 text-white active:bg-white/30' 
+                        : 'bg-red-500/80 text-white active:bg-red-500'
+                    } backdrop-blur-sm border border-white/10 active:scale-95 touch-manipulation select-none`}
                   >
-                    {isVideoEnabled ? <Video size={24} /> : <VideoOff size={24} />}
+                    {isVideoEnabled ? <Video size={22} className="md:w-6 md:h-6" /> : <VideoOff size={22} className="md:w-6 md:h-6" />}
                   </button>
                   
                   <button
-                    onClick={toggleAudio}
-                    className={`p-4 rounded-2xl transition-all duration-200 ${
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      toggleAudio(e);
+                    }}
+                    className={`p-3 md:p-4 rounded-xl md:rounded-2xl transition-all duration-200 ${
                       isAudioEnabled 
-                        ? 'bg-white/20 text-white hover:bg-white/30' 
-                        : 'bg-red-500/80 text-white hover:bg-red-500'
-                    } backdrop-blur-sm border border-white/10 hover:border-white/30 hover:scale-105`}
+                        ? 'bg-white/20 text-white active:bg-white/30' 
+                        : 'bg-red-500/80 text-white active:bg-red-500'
+                    } backdrop-blur-sm border border-white/10 active:scale-95 touch-manipulation select-none`}
                   >
-                    {isAudioEnabled ? <Mic size={24} /> : <MicOff size={24} />}
+                    {isAudioEnabled ? <Mic size={22} className="md:w-6 md:h-6" /> : <MicOff size={22} className="md:w-6 md:h-6" />}
                   </button>
 
                   {/* Camera flip button - mobile only */}
                   {/Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) && (
                     <button
-                      onClick={flipCamera}
-                      className="p-4 rounded-2xl bg-blue-500/80 text-white hover:bg-blue-500 transition-all duration-200 backdrop-blur-sm border border-white/10 hover:border-white/30 hover:scale-105"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        flipCamera(e);
+                      }}
+                      className="p-3 md:p-4 rounded-xl md:rounded-2xl bg-blue-500/80 text-white active:bg-blue-500 transition-all duration-200 backdrop-blur-sm border border-white/10 active:scale-95 touch-manipulation select-none"
                       title={`Switch to ${facingMode === 'user' ? 'rear' : 'front'} camera`}
                     >
-                      <RotateCcw size={24} />
+                      <RotateCcw size={22} className="md:w-6 md:h-6" />
                     </button>
                   )}
 
                   <button
-                    onClick={disconnectFromRoom}
-                    className="p-4 rounded-2xl bg-red-500/80 text-white hover:bg-red-500 transition-all duration-200 backdrop-blur-sm border border-white/10 hover:border-white/30 hover:scale-105"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      disconnectFromRoom(e);
+                    }}
+                    className="p-3 md:p-4 rounded-xl md:rounded-2xl bg-red-500/80 text-white active:bg-red-500 transition-all duration-200 backdrop-blur-sm border border-white/10 active:scale-95 touch-manipulation select-none"
                   >
-                    <PhoneOff size={24} />
+                    <PhoneOff size={22} className="md:w-6 md:h-6" />
                   </button>
                 </div>
               </div>
             </div>
-
-            {/* Mobile tap anywhere to show controls */}
-            <div className="md:hidden absolute inset-0 bg-transparent pointer-events-auto" 
-              onClick={() => {
-                const panel = document.getElementById('control-panel');
-                if (panel) {
-                  const isVisible = panel.classList.contains('opacity-100');
-                  if (isVisible) {
-                    panel.classList.remove('opacity-100', 'translate-y-0');
-                    panel.classList.add('translate-y-4');
-                  } else {
-                    panel.classList.add('opacity-100', 'translate-y-0');
-                    panel.classList.remove('translate-y-4');
-                    // Auto-hide after 4 seconds
-                    setTimeout(() => {
-                      panel.classList.remove('opacity-100', 'translate-y-0');
-                      panel.classList.add('translate-y-4');
-                    }, 4000);
-                  }
-                }
-              }}
-            />
           </div>
         </div>
       )}
@@ -855,36 +823,4 @@ const CleanLiveKitApp = () => {
   );
 };
 
-// Add required CSS animations
-const style = document.createElement('style');
-style.textContent = `
-  @keyframes scroll-down {
-    0% { transform: translateY(-100vh); }
-    100% { transform: translateY(100vh); }
-  }
-  @keyframes scroll-up {
-    0% { transform: translateY(100vh); }
-    100% { transform: translateY(-100vh); }
-  }
-  @keyframes scroll-down-slow {
-    0% { transform: translateY(-100vh); }
-    100% { transform: translateY(100vh); }
-  }
-  @keyframes scroll-up-slow {
-    0% { transform: translateY(100vh); }
-    100% { transform: translateY(-100vh); }
-  }
-  .animate-scroll-down { animation: scroll-down 25s linear infinite; }
-  .animate-scroll-up { animation: scroll-up 30s linear infinite; }
-  .animate-scroll-down-slow { animation: scroll-down-slow 35s linear infinite; }
-  .animate-scroll-up-slow { animation: scroll-up-slow 40s linear infinite; }
-  
-  /* Ensure smooth rendering */
-  * {
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
-  }
-`;
-document.head.appendChild(style);
-
-export default CleanLiveKitApp;
+export default WorkingLiveKitApp;
