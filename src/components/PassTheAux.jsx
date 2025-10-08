@@ -142,7 +142,7 @@ const PassTheAux = ({ roomName, participants, onClose, room }) => {
 
     const handleCloseModal = () => {
         setShowMusicModal(false);
-        if (onClose) onClose();
+        // Don't close the entire component, just the modal
     };
 
     // Broadcast music data to all participants
