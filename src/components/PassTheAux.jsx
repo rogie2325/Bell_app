@@ -22,7 +22,12 @@ const PassTheAux = ({ roomName, participants, onClose, room }) => {
 
     // Listen for music sharing events from other users via LiveKit
     useEffect(() => {
-        if (!room) return;
+        if (!room) {
+            console.error('❌ PassTheAux: Room is not available!');
+            return;
+        }
+
+        console.log('✅ PassTheAux: Room connected, setting up data listener');
 
         const handleDataReceived = (payload, participant) => {
             try {
@@ -186,9 +191,12 @@ const PassTheAux = ({ roomName, participants, onClose, room }) => {
     // Broadcast large data in chunks (max 60KB per chunk to be safe)
     const broadcastMusicDataChunked = async (songData) => {
         if (!room) {
-            console.warn('Room not available for broadcasting');
+            console.error('❌ CANNOT BROADCAST: Room is not available!');
+            alert('Connection error: Room not connected. Please rejoin the room.');
             return;
         }
+
+        console.log('✅ Room is connected, starting broadcast...');
 
         const CHUNK_SIZE = 60000; // 60KB chunks (safe limit)
         const dataUrl = songData.url;
@@ -295,7 +303,15 @@ const PassTheAux = ({ roomName, participants, onClose, room }) => {
 
     const handleFileUpload = async (e) => {
         const file = e.target.files[0];
-        console.log('File selected:', file);
+        console.log('📁 File selected:', file?.name, file?.type);
+        
+        if (!room) {
+            console.error('❌ Room not connected! Cannot upload file.');
+            alert('Please wait for the room connection before uploading.');
+            return;
+        }
+        
+        console.log('✅ Room is connected:', room);
         
         if (file && file.type.startsWith('audio/')) {
             // Convert file to base64 data URL for sharing

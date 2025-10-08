@@ -146,20 +146,20 @@ const WorkingLiveKitApp = () => {
       });
 
       newRoom.on(RoomEvent.ParticipantConnected, (participant) => {
-        console.log('👋 Participant joined:', participant.name);
+        console.log('👋 Participant joined:', participant.identity);
         const updatedParticipants = Array.from(newRoom.remoteParticipants.values());
         setParticipants(updatedParticipants);
         console.log('👥 Updated participants:', updatedParticipants.length);
       });
 
       newRoom.on(RoomEvent.ParticipantDisconnected, (participant) => {
-        console.log('👋 Participant left:', participant.name);
+        console.log('👋 Participant left:', participant.identity);
         const updatedParticipants = Array.from(newRoom.remoteParticipants.values());
         setParticipants(updatedParticipants);
       });
 
       newRoom.on(RoomEvent.TrackSubscribed, (track, publication, participant) => {
-        console.log('🎥 Track subscribed:', track.kind, 'from', participant.name);
+        console.log('🎥 Track subscribed:', track.kind, 'from', participant.identity);
         
         // Force re-render to attach new tracks
         const updatedParticipants = Array.from(newRoom.remoteParticipants.values());
@@ -167,7 +167,7 @@ const WorkingLiveKitApp = () => {
         
         // Auto-play audio tracks immediately
         if (track.kind === 'audio') {
-          console.log('🔊 Auto-playing audio track from:', participant.name);
+          console.log('🔊 Auto-playing audio track from:', participant.identity);
           // Audio tracks are automatically handled by the RemoteParticipantVideo component
         }
       });
@@ -423,7 +423,7 @@ const WorkingLiveKitApp = () => {
         if (videoRef.current) {
           const videoTrack = participant.videoTrackPublications.values().next().value?.track;
           if (videoTrack && videoTrack.kind === 'video') {
-            console.log('🎥 Attaching remote video for:', participant.name);
+            console.log('🎥 Attaching remote video for:', participant.identity);
             videoTrack.attach(videoRef.current);
           }
         }
@@ -432,7 +432,7 @@ const WorkingLiveKitApp = () => {
         if (audioRef.current) {
           const audioTrack = participant.audioTrackPublications.values().next().value?.track;
           if (audioTrack && audioTrack.kind === 'audio') {
-            console.log('🔊 Attaching remote audio for:', participant.name);
+            console.log('🔊 Attaching remote audio for:', participant.identity);
             audioTrack.attach(audioRef.current);
             
             // Force play with user interaction
@@ -509,7 +509,7 @@ const WorkingLiveKitApp = () => {
               </div>
               {!isSmall && (
                 <>
-                  <div className="text-lg font-medium mt-2">{participant.name}</div>
+                  <div className="text-lg font-medium mt-2">{participant.identity || participant.name}</div>
                   <div className="text-sm text-white/60">Camera Off</div>
                 </>
               )}
@@ -518,7 +518,7 @@ const WorkingLiveKitApp = () => {
         )}
         
         <div className={`absolute ${isSmall ? 'bottom-1 left-1' : 'bottom-3 left-3'} bg-black/70 backdrop-blur-sm text-white ${isSmall ? 'px-2 py-0.5' : 'px-3 py-1'} rounded-full ${isSmall ? 'text-xs' : 'text-sm'} font-medium flex items-center space-x-1`}>
-          <span>{isSmall ? participant.name.split(' ')[0] : participant.name}</span>
+          <span>{isSmall ? (participant.identity || participant.name).split(' ')[0] : (participant.identity || participant.name)}</span>
           {hasAudio && <span className="text-green-400 text-xs">🎤</span>}
         </div>
       </div>
