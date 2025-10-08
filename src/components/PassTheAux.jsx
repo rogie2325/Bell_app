@@ -28,7 +28,7 @@ const PassTheAux = ({ roomName, participants, onClose, room }) => {
 
         console.log('✅ PassTheAux: Room connected, setting up data listener');
         console.log('✅ Room state:', room.state);
-        console.log('✅ Room participants:', room.participants.size);
+        console.log('✅ Room participants:', room.remoteParticipants?.size || 0);
 
         const handleDataReceived = (payload, participant) => {
             try {
