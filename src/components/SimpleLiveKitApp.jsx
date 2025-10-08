@@ -801,23 +801,24 @@ const WorkingLiveKitApp = () => {
                     {isAudioEnabled ? <Mic size={22} className="md:w-6 md:h-6" /> : <MicOff size={22} className="md:w-6 md:h-6" />}
                   </button>
 
-                  {/* Pass The Aux button */}
-                  <button
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      setShowPassTheAux(!showPassTheAux);
-                    }}
-                    className={`p-3 md:p-4 rounded-xl md:rounded-2xl transition-all duration-200 ${
-                      showPassTheAux 
-                        ? 'bg-purple-500/80 text-white active:bg-purple-500' 
-                        : 'bg-white/20 text-white active:bg-white/30'
-                    } backdrop-blur-sm border border-white/10 active:scale-95 touch-manipulation select-none`}
-                    title="Pass The Aux"
-                  >
-                    <Music size={22} className="md:w-6 md:h-6" />
-                  </button>
-
+                  {/* Pass The Aux button - only show when room is connected */}
+                  {room && isConnected && (
+                    <button
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setShowPassTheAux(!showPassTheAux);
+                      }}
+                      className={`p-3 md:p-4 rounded-xl md:rounded-2xl transition-all duration-200 ${
+                        showPassTheAux 
+                          ? 'bg-purple-500/80 text-white active:bg-purple-500' 
+                          : 'bg-white/20 text-white active:bg-white/30'
+                      } backdrop-blur-sm border border-white/10 active:scale-95 touch-manipulation select-none`}
+                      title="Pass The Aux"
+                    >
+                      <Music size={22} className="md:w-6 md:h-6" />
+                    </button>
+                  )}
                   {/* Camera flip button - mobile only */}
                   {/Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) && (
                     <button

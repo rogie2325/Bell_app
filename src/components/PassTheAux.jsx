@@ -1,4 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
+import { storage } from '../firebase';
 import './PassTheAux.css';
 
 const PassTheAux = ({ roomName, participants, onClose, room }) => {
@@ -13,12 +15,9 @@ const PassTheAux = ({ roomName, participants, onClose, room }) => {
     const [playlist, setPlaylist] = useState([]);
     const [uploadProgress, setUploadProgress] = useState(0);
     const [isUploading, setIsUploading] = useState(false);
-    const [isReceiving, setIsReceiving] = useState(false);
-    const [receiveProgress, setReceiveProgress] = useState(0);
     
     const audioRef = useRef(null);
     const fileInputRef = useRef(null);
-    const receivedChunksRef = useRef({});
 
     // Listen for music sharing events from other users via LiveKit
     useEffect(() => {
@@ -42,73 +41,12 @@ const PassTheAux = ({ roomName, participants, onClose, room }) => {
                 console.log('MESSAGE TYPE:', message.type);
                 console.log('======================');
 
-                // Handle chunked data
-                if (message.type === 'MUSIC_CHUNK') {
-                    const { transferId, chunkIndex, totalChunks, data, metadata } = message;
-                    
-                    console.log('CHUNK INFO:');
-                    console.log('  - Chunk:', chunkIndex + 1, '/', totalChunks);
-                    console.log('  - Transfer ID:', transferId);
-                    console.log('  - Song:', metadata?.name);
-                    
-                    if (!receivedChunksRef.current[transferId]) {
-                        receivedChunksRef.current[transferId] = {
-                            chunks: new Array(totalChunks),
-                            metadata: metadata,
-                            receivedCount: 0
-                        };
-                        console.log('STARTED NEW TRANSFER:', transferId);
-                        setIsReceiving(true);
-                    }
-                    
-                    receivedChunksRef.current[transferId].chunks[chunkIndex] = data;
-                    receivedChunksRef.current[transferId].receivedCount++;
-                    
-                    const progress = Math.round((receivedChunksRef.current[transferId].receivedCount / totalChunks) * 100);
-                    setReceiveProgress(progress);
-                    console.log('PROGRESS:', progress + '%', `(${receivedChunksRef.current[transferId].receivedCount}/${totalChunks} chunks)`);
-                    
-                    // Check if all chunks received
-                    if (receivedChunksRef.current[transferId].receivedCount === totalChunks) {
-                        console.log('======================');
-                        console.log('ALL CHUNKS RECEIVED!');
-                        console.log('ASSEMBLING SONG...');
-                        
-                        const completeData = receivedChunksRef.current[transferId].chunks.join('');
-                        const songMetadata = receivedChunksRef.current[transferId].metadata;
-                        
-                        console.log('COMPLETE DATA LENGTH:', completeData.length);
-                        
-                        const newSong = {
-                            url: completeData,
-                            type: songMetadata.type,
-                            name: songMetadata.name,
-                            youtubeId: songMetadata.youtubeId,
-                            addedBy: participant?.identity || 'Someone'
-                        };
-                        
-                        console.log('SONG READY:', newSong.name);
-                        console.log('SETTING CURRENT SONG...');
-                        
-                        setCurrentSong(newSong);
-                        setAuxHolder(participant?.identity || 'Someone');
-                        setPlaylist(prev => [...prev, newSong]);
-                        
-                        // Clean up
-                        delete receivedChunksRef.current[transferId];
-                        setIsReceiving(false);
-                        setReceiveProgress(0);
-                        console.log('CLEANED UP TRANSFER DATA');
-                        console.log('======================');
-                    }
-                }
-
                 if (message.type === 'PING') {
                     console.log('🏓 PONG! Received test ping from:', message.from);
                 }
 
                 if (message.type === 'MUSIC_SHARE') {
-                    console.log('DIRECT MUSIC SHARE (YouTube/Small file)');
+                    console.log('✅ MUSIC SHARE RECEIVED');
                     const newSong = {
                         url: message.url,
                         type: message.musicType,
@@ -118,6 +56,7 @@ const PassTheAux = ({ roomName, participants, onClose, room }) => {
                     };
                     
                     console.log('SONG:', newSong.name);
+                    console.log('URL:', newSong.url);
                     setCurrentSong(newSong);
                     setAuxHolder(participant?.identity || 'Someone');
                     setPlaylist(prev => [...prev, newSong]);
@@ -206,88 +145,14 @@ const PassTheAux = ({ roomName, participants, onClose, room }) => {
         if (onClose) onClose();
     };
 
-    // Broadcast large data in chunks (max 60KB per chunk to be safe)
-    const broadcastMusicDataChunked = async (songData) => {
-        if (!room) {
-            console.error('❌ CANNOT BROADCAST: Room is not available!');
-            alert('Connection error: Room not connected. Please rejoin the room.');
-            return;
-        }
-
-        console.log('✅ Room is connected, starting broadcast...');
-
-        const CHUNK_SIZE = 60000; // 60KB chunks (safe limit)
-        const dataUrl = songData.url;
-        const transferId = `transfer_${Date.now()}_${Math.random()}`;
-        
-        // Calculate chunks
-        const totalChunks = Math.ceil(dataUrl.length / CHUNK_SIZE);
-        
-        console.log('======================');
-        console.log('SENDING MUSIC FILE');
-        console.log('Song:', songData.name);
-        console.log('Total size:', dataUrl.length, 'bytes');
-        console.log('Chunks:', totalChunks);
-        console.log('Transfer ID:', transferId);
-        console.log('======================');
-        
-        setIsUploading(true);
-        
-        // Send chunks
-        for (let i = 0; i < totalChunks; i++) {
-            const start = i * CHUNK_SIZE;
-            const end = Math.min(start + CHUNK_SIZE, dataUrl.length);
-            const chunk = dataUrl.substring(start, end);
-            
-            const message = JSON.stringify({
-                type: 'MUSIC_CHUNK',
-                transferId: transferId,
-                chunkIndex: i,
-                totalChunks: totalChunks,
-                data: chunk,
-                metadata: {
-                    name: songData.name,
-                    type: songData.type,
-                    youtubeId: songData.youtubeId
-                }
-            });
-
-            const encoder = new TextEncoder();
-            const data = encoder.encode(message);
-            
-            try {
-                await room.localParticipant.publishData(data, { reliable: true });
-                const progress = Math.round(((i + 1) / totalChunks) * 100);
-                setUploadProgress(progress);
-                console.log('SENT CHUNK', i + 1, '/', totalChunks, '(' + progress + '%) - Chunk size:', chunk.length, 'bytes');
-                
-                // Small delay between chunks to avoid overwhelming the connection
-                await new Promise(resolve => setTimeout(resolve, 50));
-            } catch (error) {
-                console.error('ERROR SENDING CHUNK', i, ':', error);
-            }
-        }
-        
-        setIsUploading(false);
-        setUploadProgress(0);
-        console.log('======================');
-        console.log('ALL CHUNKS SENT!');
-        console.log('======================');
-    };
-
-    // Broadcast music data to all participants (for small data like YouTube URLs)
+    // Broadcast music data to all participants
     const broadcastMusicData = (songData) => {
         if (!room) {
             console.warn('Room not available for broadcasting');
             return;
         }
 
-        // If it's audio data (large), use chunking
-        if (songData.type === 'audio' && songData.url.length > 60000) {
-            return broadcastMusicDataChunked(songData);
-        }
-
-        // For small data (YouTube URLs), send directly
+        // Send Firebase URL directly (no chunking needed!)
         const message = JSON.stringify({
             type: 'MUSIC_SHARE',
             url: songData.url,
@@ -300,7 +165,7 @@ const PassTheAux = ({ roomName, participants, onClose, room }) => {
         const data = encoder.encode(message);
         
         room.localParticipant.publishData(data, { reliable: true });
-        console.log('Broadcasted music data:', songData);
+        console.log('✅ Broadcasted music URL:', songData.name);
     };
 
     // Broadcast playback control
@@ -329,43 +194,73 @@ const PassTheAux = ({ roomName, participants, onClose, room }) => {
             return;
         }
         
-        console.log('✅ Room is connected:', room);
-        
-        if (file && file.type.startsWith('audio/')) {
-            // Convert file to base64 data URL for sharing
-            const reader = new FileReader();
-            
-            reader.onload = (event) => {
-                const dataUrl = event.target.result;
-                
-                const newSong = {
-                    url: dataUrl, // Base64 data URL can be shared
-                    type: 'audio',
-                    name: file.name,
-                    addedBy: 'You'
-                };
-                
-                console.log('New song created with data URL');
-                
-                const newPlaylist = [...playlist, newSong];
-                setPlaylist(newPlaylist);
-                
-                if (!currentSong) {
-                    console.log('Setting current song:', newSong.name);
-                    setCurrentSong(newSong);
-                    setAuxHolder('You');
-                    
-                    // Broadcast to all participants
-                    broadcastMusicData(newSong);
-                }
-                
-                handleCloseModal();
-            };
-            
-            reader.readAsDataURL(file);
-        } else {
+        if (!file || !file.type.startsWith('audio/')) {
             console.log('Invalid file type:', file?.type);
             alert('Please select an audio file (MP3, WAV, M4A, etc.)');
+            return;
+        }
+
+        console.log('✅ Room is connected, uploading to Firebase...');
+        setIsUploading(true);
+        setUploadProgress(0);
+
+        try {
+            // Create a unique filename
+            const timestamp = Date.now();
+            const filename = `music/${timestamp}_${file.name}`;
+            const storageRef = ref(storage, filename);
+
+            // Upload file to Firebase Storage with progress tracking
+            const uploadTask = uploadBytesResumable(storageRef, file);
+
+            uploadTask.on('state_changed',
+                (snapshot) => {
+                    // Track upload progress
+                    const progress = Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100);
+                    setUploadProgress(progress);
+                    console.log('Upload progress:', progress + '%');
+                },
+                (error) => {
+                    // Handle upload error
+                    console.error('❌ Firebase upload error:', error);
+                    alert('Failed to upload file: ' + error.message);
+                    setIsUploading(false);
+                    setUploadProgress(0);
+                },
+                async () => {
+                    // Upload complete - get download URL
+                    const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+                    console.log('✅ File uploaded! Download URL:', downloadURL);
+
+                    const newSong = {
+                        url: downloadURL,
+                        type: 'audio',
+                        name: file.name,
+                        addedBy: 'You'
+                    };
+
+                    const newPlaylist = [...playlist, newSong];
+                    setPlaylist(newPlaylist);
+
+                    if (!currentSong) {
+                        console.log('Setting current song:', newSong.name);
+                        setCurrentSong(newSong);
+                        setAuxHolder('You');
+
+                        // Broadcast the Firebase URL (tiny message, no chunking needed!)
+                        broadcastMusicData(newSong);
+                    }
+
+                    setIsUploading(false);
+                    setUploadProgress(0);
+                    handleCloseModal();
+                }
+            );
+        } catch (error) {
+            console.error('❌ Upload error:', error);
+            alert('Failed to upload file: ' + error.message);
+            setIsUploading(false);
+            setUploadProgress(0);
         }
     };
 
@@ -486,20 +381,6 @@ const PassTheAux = ({ roomName, participants, onClose, room }) => {
                             <div className="progress-bar-fill" style={{ width: `${uploadProgress}%` }}></div>
                         </div>
                         <div className="upload-percentage">{uploadProgress}%</div>
-                    </div>
-                </div>
-            )}
-
-            {/* Receiving Progress Indicator */}
-            {isReceiving && (
-                <div className="upload-progress-overlay">
-                    <div className="upload-progress-card">
-                        <div className="upload-spinner">🎵</div>
-                        <div className="upload-text">Receiving music...</div>
-                        <div className="progress-bar-container">
-                            <div className="progress-bar-fill" style={{ width: `${receiveProgress}%` }}></div>
-                        </div>
-                        <div className="upload-percentage">{receiveProgress}%</div>
                     </div>
                 </div>
             )}
