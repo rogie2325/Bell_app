@@ -1,10 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { storage } from '../firebase';
-import { Play, Pause, Square, Upload, X, Crown } from 'lucide-react';
+import { Play, Pause, Square, Upload, X, Crown, Heart, ThumbsUp, Flame, Smile, Disc3 } from 'lucide-react';
 import './PassTheAux.css';
 
-const PassTheAux = ({ roomName, participants, onClose, room }) => {
+const PassTheAux = ({ roomName, participants, onClose, room, onMusicStateChange }) => {
     const [showMusicModal, setShowMusicModal] = useState(true);
     const [musicUrl, setMusicUrl] = useState('');
     const [currentSong, setCurrentSong] = useState(null);
@@ -19,15 +19,28 @@ const PassTheAux = ({ roomName, participants, onClose, room }) => {
     const [isReceiving, setIsReceiving] = useState(false);
     const [receiveProgress, setReceiveProgress] = useState(0);
     const [showBanner, setShowBanner] = useState(true);
+    const [reactions, setReactions] = useState([]); // For emoji reactions
+    const [userReaction, setUserReaction] = useState(null); // Current user's reaction
     
     const audioRef = useRef(null);
     const fileInputRef = useRef(null);
     const receivedChunksRef = useRef({});
 
+    // Debug: Log room availability on mount and updates
+    useEffect(() => {
+        console.log('🔍 PassTheAux Component Debug:');
+        console.log('  - Room prop:', room ? 'Available' : 'NOT AVAILABLE');
+        console.log('  - Room state:', room?.state);
+        console.log('  - Room name:', room?.name);
+        console.log('  - Local participant:', room?.localParticipant?.identity);
+    }, [room]);
+
     // Listen for music sharing events from other users via LiveKit
     useEffect(() => {
         if (!room) {
             console.error('❌ PassTheAux: Room is not available!');
+            console.error('This means the room prop was not passed correctly or connection failed');
+
             return;
         }
 
@@ -48,6 +61,13 @@ const PassTheAux = ({ roomName, participants, onClose, room }) => {
 
                 if (message.type === 'PING') {
                     console.log('🏓 PONG! Received test ping from:', message.from);
+                }
+
+                if (message.type === 'TEST_PING') {
+                    console.log('🧪 TEST BROADCAST RECEIVED!');
+                    console.log('  - From:', message.from);
+                    console.log('  - Timestamp:', new Date(message.timestamp).toLocaleTimeString());
+                    alert(`✅ Test broadcast received from ${message.from}!`);
                 }
 
                 // Handle chunked music data
@@ -94,6 +114,7 @@ const PassTheAux = ({ roomName, participants, onClose, room }) => {
                         setCurrentSong(newSong);
                         setAuxHolder(participant?.identity || 'Someone');
                         setPlaylist(prev => [...prev, newSong]);
+                        setShowBanner(true); // Show banner when song is received
                         
                         // Clean up
                         delete receivedChunksRef.current[transferId];
@@ -107,7 +128,18 @@ const PassTheAux = ({ roomName, participants, onClose, room }) => {
                 // Request sync from existing users
                 if (message.type === 'REQUEST_SYNC') {
                     console.log('📡 Sync requested by:', participant?.identity);
-                    // The response will be handled in a separate useEffect
+                    // If I have a current song, broadcast it to the new participant
+                    if (currentSong) {
+                        console.log('📤 Sending current song to new participant:', currentSong.name);
+                        // Wait a bit to ensure the new participant is ready
+                        setTimeout(() => {
+                            if (currentSong.url.length > 60000) {
+                                broadcastMusicDataChunked(currentSong);
+                            } else {
+                                broadcastMusicData(currentSong);
+                            }
+                        }, 500);
+                    }
                 }
 
                 if (message.type === 'MUSIC_SHARE') {
@@ -141,6 +173,22 @@ const PassTheAux = ({ roomName, participants, onClose, room }) => {
                         setIsPlaying(false);
                     }
                 }
+
+                if (message.type === 'SONG_REACTION') {
+                    console.log('REACTION RECEIVED:', message.emoji, 'from', message.from);
+                    const reactionId = Date.now() + Math.random();
+                    setReactions(prev => [...prev, { 
+                        id: reactionId, 
+                        emoji: message.emoji, 
+                        x: Math.random() * 80 + 10,
+                        from: message.from
+                    }]);
+                    
+                    // Remove reaction after animation
+                    setTimeout(() => {
+                        setReactions(prev => prev.filter(r => r.id !== reactionId));
+                    }, 3000);
+                }
             } catch (error) {
                 console.error('ERROR HANDLING RECEIVED DATA:', error);
             }
@@ -173,19 +221,32 @@ const PassTheAux = ({ roomName, participants, onClose, room }) => {
             console.log('📤 Broadcasting current song to new participant');
             
             // Wait a bit for their data channel to be ready
-            setTimeout(() => {
-                const message = JSON.stringify({
-                    type: 'MUSIC_SHARE',
-                    url: currentSong.url,
-                    musicType: currentSong.type,
-                    name: currentSong.name,
-                    youtubeId: currentSong.youtubeId
-                });
+            setTimeout(async () => {
+                // Use chunking for large files
+                if (currentSong.url && currentSong.url.length > 60000) {
+                    console.log('📦 Sending chunked song to new participant');
+                    await broadcastMusicDataChunked(currentSong);
+                } else {
+                    const message = JSON.stringify({
+                        type: 'MUSIC_SHARE',
+                        url: currentSong.url,
+                        musicType: currentSong.type,
+                        name: currentSong.name,
+                        youtubeId: currentSong.youtubeId
+                    });
 
-                const encoder = new TextEncoder();
-                const data = encoder.encode(message);
-                room.localParticipant.publishData(data, { reliable: true });
-                console.log('✅ Sent current song to new participant');
+                    const encoder = new TextEncoder();
+                    const data = encoder.encode(message);
+                    room.localParticipant.publishData(data, { reliable: true });
+                    console.log('✅ Sent current song to new participant');
+                }
+                
+                // Send current playback state
+                if (isPlaying) {
+                    setTimeout(() => {
+                        broadcastPlaybackControl('play');
+                    }, 500);
+                }
             }, 1500);
         };
 
@@ -194,7 +255,7 @@ const PassTheAux = ({ roomName, participants, onClose, room }) => {
         return () => {
             room.off('participantConnected', handleParticipantConnected);
         };
-    }, [room, currentSong]);
+    }, [room, currentSong, isPlaying]);
 
     useEffect(() => {
         if (audioRef.current) {
@@ -205,14 +266,17 @@ const PassTheAux = ({ roomName, participants, onClose, room }) => {
     useEffect(() => {
         if (audioRef.current && currentSong && currentSong.type === 'audio') {
             audioRef.current.load();
-            audioRef.current.play().then(() => {
-                setIsPlaying(true);
-            }).catch(error => {
-                console.log('Auto-play prevented:', error);
-                setIsPlaying(false);
-            });
+            // Don't auto-play - wait for explicit play signal
+            console.log('🎵 Audio loaded:', currentSong.name);
         }
     }, [currentSong]);
+
+    // Notify parent component when music state changes
+    useEffect(() => {
+        if (onMusicStateChange) {
+            onMusicStateChange(!!(currentSong && isPlaying));
+        }
+    }, [currentSong, isPlaying]); // Removed onMusicStateChange from dependencies
 
     useEffect(() => {
         if (audioRef.current) {
@@ -274,8 +338,20 @@ const PassTheAux = ({ roomName, participants, onClose, room }) => {
     const broadcastMusicDataChunked = async (songData) => {
         if (!room) {
             console.error('❌ CANNOT BROADCAST: Room is not available!');
+            alert('Room connection lost. Please try rejoining.');
             return;
         }
+
+        if (!room.localParticipant) {
+            console.error('❌ CANNOT BROADCAST: Local participant not available!');
+            alert('Connection issue detected. Please refresh and rejoin.');
+            return;
+        }
+
+        console.log('✅ Room check passed');
+        console.log('  - Room state:', room.state);
+        console.log('  - Local participant:', room.localParticipant.identity);
+        console.log('  - Room name:', room.name);
 
         const CHUNK_SIZE = 60000; // 60KB chunks (safe limit)
         const dataUrl = songData.url;
@@ -317,6 +393,10 @@ const PassTheAux = ({ roomName, participants, onClose, room }) => {
             const data = encoder.encode(message);
             
             try {
+                if (!room.localParticipant) {
+                    throw new Error('Local participant lost during chunk sending');
+                }
+                
                 await room.localParticipant.publishData(data, { reliable: true });
                 const progress = Math.round(((i + 1) / totalChunks) * 100);
                 setUploadProgress(progress);
@@ -325,7 +405,16 @@ const PassTheAux = ({ roomName, participants, onClose, room }) => {
                 // Small delay between chunks to avoid overwhelming the connection
                 await new Promise(resolve => setTimeout(resolve, 50));
             } catch (error) {
-                console.error('ERROR SENDING CHUNK', i, ':', error);
+                console.error('❌ ERROR SENDING CHUNK', i, ':', error);
+                console.error('Error details:', {
+                    message: error.message,
+                    roomState: room?.state,
+                    hasLocalParticipant: !!room?.localParticipant
+                });
+                alert(`Failed to send chunk ${i + 1}/${totalChunks}. Error: ${error.message}`);
+                setIsUploading(false);
+                setUploadProgress(0);
+                return; // Stop sending if there's an error
             }
         }
         
@@ -334,11 +423,22 @@ const PassTheAux = ({ roomName, participants, onClose, room }) => {
         console.log('======================');
         console.log('ALL CHUNKS SENT!');
         console.log('======================');
+        
+        // Don't auto-play - wait for manual play button press
+        console.log('🎵 All chunks delivered - ready to play (manual start)');
     };
 
     // Broadcast playback control
     const broadcastPlaybackControl = (action) => {
-        if (!room) return;
+        if (!room) {
+            console.error('❌ Cannot broadcast playback control - no room');
+            return;
+        }
+
+        if (!room.localParticipant) {
+            console.error('❌ Cannot broadcast playback control - no local participant');
+            return;
+        }
 
         const message = JSON.stringify({
             type: 'PLAYBACK_CONTROL',
@@ -348,17 +448,85 @@ const PassTheAux = ({ roomName, participants, onClose, room }) => {
         const encoder = new TextEncoder();
         const data = encoder.encode(message);
         
-        room.localParticipant.publishData(data, { reliable: true });
-        console.log('Broadcasted playback control:', action);
+        try {
+            room.localParticipant.publishData(data, { reliable: true });
+            console.log('✅ Broadcasted playback control:', action);
+        } catch (error) {
+            console.error('❌ Failed to broadcast playback control:', error);
+        }
+    };
+
+    // Test function to verify data channel works
+    const testBroadcast = () => {
+        alert('🧪 TEST FUNCTION CALLED!');
+        console.log('🧪 TEST BROADCAST - Starting diagnostic...');
+        console.log('  - Room exists:', !!room);
+        console.log('  - Room state:', room?.state);
+        console.log('  - Local participant exists:', !!room?.localParticipant);
+        console.log('  - Local participant identity:', room?.localParticipant?.identity);
+        console.log('  - Can publish data:', room?.localParticipant?.canPublishData);
+        console.log('  - Permissions:', room?.localParticipant?.permissions);
+        
+        if (!room || !room.localParticipant) {
+            console.error('❌ TEST FAILED: Room or local participant not available');
+            alert('Room not ready for broadcasting');
+            return;
+        }
+
+        try {
+            const testMessage = JSON.stringify({
+                type: 'TEST_PING',
+                from: room.localParticipant.identity,
+                timestamp: Date.now()
+            });
+            
+            console.log('📤 Test message:', testMessage);
+            
+            const encoder = new TextEncoder();
+            const data = encoder.encode(testMessage);
+            
+            console.log('📊 Encoded data size:', data.byteLength, 'bytes');
+            console.log('🚀 Calling publishData...');
+            
+            room.localParticipant.publishData(data, { reliable: true });
+            
+            console.log('✅ TEST BROADCAST SENT SUCCESSFULLY (no errors thrown)');
+            alert('Test broadcast sent! Check other users to see if they received it.\n\nCheck console for details.');
+        } catch (error) {
+            console.error('❌ TEST BROADCAST FAILED:', error);
+            alert(`Test broadcast failed: ${error.message}`);
+        }
     };
 
     const handleFileUpload = async (e) => {
         const file = e.target.files[0];
         console.log('📁 File selected:', file?.name, file?.type);
+        console.log('📱 Device type:', /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ? 'Mobile' : 'Desktop');
         
         if (!room) {
             console.error('❌ Room not connected! Cannot upload file.');
             alert('Please wait for the room connection before uploading.');
+            return;
+        }
+
+        // Check room state
+        console.log('🔍 Room state check:');
+        console.log('  - Room.state:', room.state);
+        console.log('  - Room.name:', room.name);
+        console.log('  - Local participant:', room.localParticipant?.identity);
+        console.log('  - Local participant SID:', room.localParticipant?.sid);
+        console.log('  - Can publish data:', room.localParticipant?.canPublishData);
+        console.log('  - Remote participants:', room.remoteParticipants?.size);
+        
+        if (room.state !== 'connected') {
+            console.error('❌ Room is not in connected state! Current state:', room.state);
+            alert('Room is not fully connected. Please wait a moment and try again.');
+            return;
+        }
+
+        if (!room.localParticipant) {
+            console.error('❌ Local participant not available!');
+            alert('Connection not ready. Please refresh and try again.');
             return;
         }
         
@@ -386,18 +554,26 @@ const PassTheAux = ({ roomName, participants, onClose, room }) => {
             };
             
             console.log('✅ File converted to base64');
+            console.log('📊 File size:', dataUrl.length, 'bytes');
             
             const newPlaylist = [...playlist, newSong];
             setPlaylist(newPlaylist);
             
-            if (!currentSong) {
-                console.log('Setting current song:', newSong.name);
-                setCurrentSong(newSong);
-                setAuxHolder('You');
-                
-                // Broadcast using chunking (for large files)
-                await broadcastMusicDataChunked(newSong);
+            console.log('Setting current song:', newSong.name);
+            setCurrentSong(newSong);
+            setAuxHolder('You');
+            setShowBanner(true); // Show banner for uploader
+            
+            // On mobile, wait a moment to ensure connection is stable
+            const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+            if (isMobile) {
+                console.log('📱 Mobile device detected - waiting 1 second before broadcast');
+                await new Promise(resolve => setTimeout(resolve, 1000));
             }
+            
+            // Broadcast using chunking (for large files)
+            console.log('🚀 Starting broadcast...');
+            await broadcastMusicDataChunked(newSong);
             
             setIsUploading(false);
             setUploadProgress(0);
@@ -510,6 +686,37 @@ const PassTheAux = ({ roomName, participants, onClose, room }) => {
         handleCloseModal();
     };
 
+    // Reaction system
+    const sendReaction = (emoji) => {
+        if (!room) return;
+
+        // Set user's reaction
+        setUserReaction(emoji);
+
+        // Broadcast reaction to other users
+        const message = JSON.stringify({
+            type: 'SONG_REACTION',
+            emoji: emoji,
+            from: room.localParticipant.identity
+        });
+
+        const encoder = new TextEncoder();
+        const data = encoder.encode(message);
+        room.localParticipant.publishData(data, { reliable: true });
+
+        // Add to reactions list with animation
+        const reactionId = Date.now();
+        setReactions(prev => [...prev, { id: reactionId, emoji, x: Math.random() * 80 + 10 }]);
+
+        // Remove reaction after animation
+        setTimeout(() => {
+            setReactions(prev => prev.filter(r => r.id !== reactionId));
+        }, 3000);
+
+        // Clear user reaction after 2 seconds
+        setTimeout(() => setUserReaction(null), 2000);
+    };
+
     // Debug logging
     console.log('PassTheAux State:', {
         currentSong,
@@ -535,83 +742,140 @@ const PassTheAux = ({ roomName, participants, onClose, room }) => {
                 </div>
             )}
 
-            {/* Glassmorphic Music Banner */}
-            {showBanner && (
-                <div className="music-banner-glass">
-                    {/* Music Visualizer Animation */}
-                    {isPlaying && (
-                        <div className="music-visualizer">
-                            <div className="visualizer-bar"></div>
-                            <div className="visualizer-bar"></div>
-                            <div className="visualizer-bar"></div>
-                            <div className="visualizer-bar"></div>
-                            <div className="visualizer-bar"></div>
+            {/* Spotify/Apple Music Style Player */}
+            {showBanner && currentSong && (
+                <div className="music-player-container">
+                    {/* Close Button - Top Right */}
+                    <button 
+                        className="player-close-btn"
+                        onClick={() => {
+                            if (onClose) onClose();
+                        }}
+                        title="Close Music Player"
+                    >
+                        <X size={20} />
+                    </button>
+
+                    {/* Floating Reactions */}
+                    <div className="reactions-container">
+                        {reactions.map(reaction => (
+                            <div 
+                                key={reaction.id} 
+                                className="floating-reaction"
+                                style={{ left: `${reaction.x}%` }}
+                            >
+                                {reaction.emoji}
+                            </div>
+                        ))}
+                    </div>
+
+                    {/* DJ Scratch Disc Visual */}
+                    <div className="dj-scratch-container">
+                        <div className={`vinyl-disc ${isPlaying ? 'spinning' : ''}`}>
+                            <Disc3 size={80} className="vinyl-icon" />
+                            <div className="vinyl-center">
+                                <Crown size={24} className="crown-vinyl" />
+                            </div>
+                        </div>
+                        <div className="dj-label-badge">
+                            <span className="dj-text">DJ {auxHolder || 'Unknown'}</span>
+                        </div>
+                    </div>
+
+                    {/* Song Info */}
+                    <div className="player-song-info">
+                        <div className="song-title-main">{currentSong.name}</div>
+                        <div className="song-subtitle">Mixed by {auxHolder || 'Unknown'}</div>
+                    </div>
+
+                    {/* Progress Bar */}
+                    {currentSong.type === 'audio' && (
+                        <div className="player-progress">
+                            <span className="time-text">{formatTime(currentTime)}</span>
+                            <input
+                                type="range"
+                                min="0"
+                                max={duration || 100}
+                                value={currentTime}
+                                onChange={handleSeek}
+                                className="progress-slider"
+                            />
+                            <span className="time-text">{formatTime(duration)}</span>
                         </div>
                     )}
 
-                    <div className="banner-content">
-                        {/* Crown Icon */}
-                        <div className="crown-container">
-                            <Crown className="crown-icon-glass" size={24} strokeWidth={2.5} />
-                        </div>
-
-                        {/* Song Info */}
-                        <div className="song-info-glass">
-                            {currentSong ? (
-                                <>
-                                    <div className="now-playing-text">NOW PLAYING</div>
-                                    <div className="song-title-glass">{currentSong.name}</div>
-                                    <div className="dj-name-glass">DJ: {auxHolder || 'Unknown'}</div>
-                                </>
-                            ) : (
-                                <>
-                                    <div className="no-aux-text">Nobody has the aux right now...</div>
-                                    <button 
-                                        className="take-control-btn"
-                                        onClick={() => setShowMusicModal(true)}
-                                    >
-                                        <Upload size={16} />
-                                        Take Control
-                                    </button>
-                                </>
-                            )}
-                        </div>
-
-                        {/* Control Buttons */}
-                        {currentSong && (
-                            <div className="glass-controls">
-                                {currentSong.type === 'audio' && (
-                                    <button 
-                                        onClick={togglePlayPause} 
-                                        className="glass-btn play-pause-btn"
-                                        title={isPlaying ? 'Pause' : 'Play'}
-                                    >
-                                        {isPlaying ? <Pause size={20} fill="currentColor" /> : <Play size={20} fill="currentColor" />}
-                                    </button>
-                                )}
-                                <button 
-                                    onClick={() => {
-                                        setCurrentSong(null);
-                                        setAuxHolder(null);
-                                        setPlaylist([]);
-                                        setIsPlaying(false);
-                                        broadcastPlaybackControl('stop');
-                                    }} 
-                                    className="glass-btn stop-btn"
-                                    title="Stop and clear"
-                                >
-                                    <Square size={18} fill="currentColor" />
-                                </button>
-                            </div>
+                    {/* Control Buttons */}
+                    <div className="player-controls">
+                        {currentSong.type === 'audio' && (
+                            <button 
+                                onClick={togglePlayPause} 
+                                className="control-btn primary-btn"
+                                title={isPlaying ? 'Pause' : 'Play'}
+                            >
+                                {isPlaying ? <Pause size={24} fill="currentColor" /> : <Play size={24} fill="currentColor" />}
+                            </button>
                         )}
-
-                        {/* Close Button */}
                         <button 
-                            className="glass-btn close-btn-glass"
-                            onClick={() => setShowBanner(false)}
-                            title="Minimize"
+                            onClick={() => {
+                                setCurrentSong(null);
+                                setAuxHolder(null);
+                                setPlaylist([]);
+                                setIsPlaying(false);
+                                broadcastPlaybackControl('stop');
+                            }} 
+                            className="control-btn secondary-btn"
+                            title="Stop and clear"
                         >
-                            <X size={18} />
+                            <Square size={18} fill="currentColor" />
+                        </button>
+                    </div>
+
+                    {/* Reaction Buttons */}
+                    <div className="reaction-buttons">
+                        <button 
+                            onClick={() => sendReaction('❤️')} 
+                            className={`reaction-btn ${userReaction === '❤️' ? 'active' : ''}`}
+                            title="Love it"
+                        >
+                            ❤️
+                        </button>
+                        <button 
+                            onClick={() => sendReaction('🔥')} 
+                            className={`reaction-btn ${userReaction === '🔥' ? 'active' : ''}`}
+                            title="Fire"
+                        >
+                            🔥
+                        </button>
+                        <button 
+                            onClick={() => sendReaction('👍')} 
+                            className={`reaction-btn ${userReaction === '👍' ? 'active' : ''}`}
+                            title="Like"
+                        >
+                            👍
+                        </button>
+                        <button 
+                            onClick={() => sendReaction('😂')} 
+                            className={`reaction-btn ${userReaction === '😂' ? 'active' : ''}`}
+                            title="Funny"
+                        >
+                            😂
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            {/* No Music - Take Control */}
+            {showBanner && !currentSong && (
+                <div className="no-music-card">
+                    <div className="no-music-content">
+                        <Disc3 size={48} className="no-music-icon" />
+                        <div className="no-music-text">Nobody has the aux right now...</div>
+                        <button 
+                            className="take-control-btn-modern"
+                            onClick={() => setShowMusicModal(true)}
+                        >
+                            <Upload size={18} />
+                            Take Control
                         </button>
                     </div>
                 </div>
@@ -662,107 +926,59 @@ const PassTheAux = ({ roomName, participants, onClose, room }) => {
                         
                         <div className="modal-header">
                             <span className="modal-icon">🎵</span>
-                            <h2>🎵 NEW: Who Has Aux? 🎵</h2>
-                            <p className="modal-subtitle">Take control of the party!</p>
+                            <h2>Pass The Aux</h2>
+                            <p className="modal-subtitle">Take control and share your music!</p>
                         </div>
 
                         <div className="music-options">
-                            <div className="option-card" onClick={(e) => {
-                                e.stopPropagation();
-                                fileInputRef.current?.click();
-                            }}>
-                                <span className="option-icon">📤</span>
-                                <div>
-                                    <h3>Upload Audio File</h3>
-                                    <p>MP3, WAV, M4A files from your device</p>
+                            {/* Upload Audio - The only working option */}
+                            <label htmlFor="audio-file-input" className="option-card-large" style={{ cursor: 'pointer' }}>
+                                <div className="option-card-icon">📤</div>
+                                <div className="option-card-content">
+                                    <h3>Upload Your Music</h3>
+                                    <p>Share MP3, WAV, or M4A files from your device</p>
+                                    <div className="upload-cta">
+                                        <Upload size={20} />
+                                        <span>Choose Audio File</span>
+                                    </div>
                                 </div>
-                            </div>
+                            </label>
                             <input
+                                id="audio-file-input"
                                 ref={fileInputRef}
                                 type="file"
-                                accept="audio/*,audio/mpeg,audio/mp3,audio/wav,audio/m4a"
-                                capture="false"
+                                accept="audio/*"
                                 onChange={handleFileUpload}
                                 style={{ display: 'none' }}
                             />
-
-                            <div className="option-card">
-                                <span className="option-icon">🎵</span>
-                                <div>
-                                    <h3>Share Music:</h3>
-                                    <p>Upload your songs and become the DJ</p>
-                                </div>
-                            </div>
-
-                            <div className="option-card">
-                                <span className="option-icon">📺</span>
-                                <div>
-                                    <h3>YouTube Videos:</h3>
-                                    <p>Watch together with friends</p>
-                                    <input
-                                        type="text"
-                                        placeholder="Paste YouTube URL..."
-                                        value={musicUrl}
-                                        onChange={(e) => setMusicUrl(e.target.value)}
-                                        onKeyPress={(e) => {
-                                            if (e.key === 'Enter') {
-                                                handleURLSubmit(e);
-                                            }
-                                        }}
-                                        onClick={(e) => e.stopPropagation()}
-                                        className="url-input-inline"
-                                    />
-                                    <button 
-                                        onClick={(e) => {
-                                            e.preventDefault();
-                                            e.stopPropagation();
-                                            handleURLSubmit(e);
-                                        }} 
-                                        className="add-url-btn"
-                                    >
-                                        Add Video
-                                    </button>
-                                </div>
-                            </div>
-
-                            <div className="option-card">
-                                <span className="option-icon">🖥️</span>
-                                <div>
-                                    <h3>Screen Share:</h3>
-                                    <p>Show your screen to everyone</p>
-                                </div>
-                            </div>
-
-                            <div className="option-card highlight">
-                                <span className="option-icon">👑</span>
-                                <div>
-                                    <h3>Aux Status:</h3>
-                                    <p>Everyone can see who's in control!</p>
-                                </div>
-                            </div>
                         </div>
 
-                        <div className="supported-platforms">
-                            <p>Supported platforms:</p>
-                            <div className="platforms">
-                                <span>📺 YouTube</span>
-                                <span>🔊 SoundCloud</span>
-                                <span>🎧 Spotify</span>
-                                <span>🌐 Direct URLs</span>
-                            </div>
+                        <div className="modal-footer">
+                            <p className="modal-hint">💡 Tip: All participants will hear your music in sync!</p>
+                            
+                            {/* Debug: Test Broadcast Button */}
+                            <button 
+                                onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    testBroadcast();
+                                }}
+                                className="test-broadcast-btn"
+                                style={{
+                                    marginTop: '16px',
+                                    padding: '10px 20px',
+                                    background: 'rgba(255, 255, 255, 0.1)',
+                                    border: '1px solid rgba(255, 255, 255, 0.3)',
+                                    borderRadius: '12px',
+                                    color: 'white',
+                                    fontSize: '13px',
+                                    cursor: 'pointer',
+                                    width: '100%'
+                                }}
+                            >
+                                🧪 Test Broadcast Connection
+                            </button>
                         </div>
-
-                        <div className="pro-tip">
-                            <span>💡</span>
-                            <div>
-                                <strong>Pro Tip:</strong>
-                                <p>For streaming services like Spotify or Apple Music, use "Share System Audio"</p>
-                            </div>
-                        </div>
-
-                        <button className="start-btn" onClick={takeAuxControl}>
-                            🎉 Let's Get Started!
-                        </button>
                     </div>
                 </div>
             )}

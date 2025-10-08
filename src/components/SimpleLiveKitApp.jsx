@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   Camera, Mic, MicOff, Video, VideoOff, Phone, Users, MessageCircle, 
-  Settings, Send, X, PhoneOff, User, RotateCcw, Music
+  Settings, Send, X, PhoneOff, User, RotateCcw, Music, MoreVertical
 } from 'lucide-react';
 import {
   Room,
@@ -30,6 +30,8 @@ const WorkingLiveKitApp = () => {
   const [audioContext, setAudioContext] = useState(null);
   const [facingMode, setFacingMode] = useState('user'); // 'user' for front camera, 'environment' for rear camera
   const [showPassTheAux, setShowPassTheAux] = useState(false);
+  const [showCameraMenu, setShowCameraMenu] = useState(false); // For camera dropdown menu
+  const [isMusicPlaying, setIsMusicPlaying] = useState(false); // Track if music is playing
 
   // LiveKit state
   const [room, setRoom] = useState(null);
@@ -47,6 +49,20 @@ const WorkingLiveKitApp = () => {
   console.log('Backend URL:', BACKEND_URL);
   console.log('LiveKit URL:', LIVEKIT_URL);
   console.log('Environment VITE_LIVEKIT_URL:', import.meta.env.VITE_LIVEKIT_URL);
+
+  // Close camera menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (showCameraMenu && !event.target.closest('.camera-menu-container')) {
+        setShowCameraMenu(false);
+      }
+    };
+
+    if (showCameraMenu) {
+      document.addEventListener('click', handleClickOutside);
+      return () => document.removeEventListener('click', handleClickOutside);
+    }
+  }, [showCameraMenu]);
 
   // Initialize audio context for mobile
   const initializeAudioContext = () => {
@@ -672,15 +688,17 @@ const WorkingLiveKitApp = () => {
           {/* Main video area */}
           <div className="flex-1 relative overflow-hidden pb-32 md:pb-24">
             
-            {/* Desktop: Side-by-side grid, Mobile: Vertical stack */}
-            <div className={`h-full p-2 md:p-4 flex flex-col md:flex-row md:items-center md:justify-center gap-2 md:gap-4 transition-all duration-500 ${
-              showPassTheAux ? 'mt-20 md:mt-24' : ''
-            }`}>
-              
-              {/* Local video */}
-              <div className={`relative bg-gradient-to-br from-blue-900/30 to-purple-900/30 rounded-xl md:rounded-2xl overflow-hidden shadow-xl flex-1 transition-all duration-500 ${
-                showPassTheAux ? 'md:max-w-xs h-32 md:h-64' : 'md:max-w-md h-48 md:h-96'
+            {/* Hide videos completely when music is playing */}
+            {!isMusicPlaying && (
+              /* Normal Video Layout */
+              <div className={`h-full p-2 md:p-4 flex flex-col md:flex-row md:items-center md:justify-center gap-2 md:gap-4 transition-all duration-500 ${
+                showPassTheAux ? 'mt-20 md:mt-24' : ''
               }`}>
+                
+                {/* Local video */}
+                <div className={`relative bg-gradient-to-br from-blue-900/30 to-purple-900/30 rounded-xl md:rounded-2xl overflow-hidden shadow-xl flex-1 transition-all duration-500 ${
+                  showPassTheAux ? 'md:max-w-xs h-32 md:h-64' : 'md:max-w-md h-48 md:h-96'
+                }`}>
                 <video
                   ref={localVideoRef}
                   autoPlay
@@ -688,6 +706,43 @@ const WorkingLiveKitApp = () => {
                   muted
                   className="w-full h-full object-cover"
                 />
+                
+                {/* Camera Menu Button - Mobile Only, Top Right */}
+                {/Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) && (
+                  <div className="absolute top-2 right-2 z-20 camera-menu-container">
+                    <button
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setShowCameraMenu(!showCameraMenu);
+                      }}
+                      className="p-2 bg-black/50 backdrop-blur-sm rounded-lg text-white active:bg-black/70 transition-all duration-200 border border-white/20 active:scale-95"
+                    >
+                      <MoreVertical size={20} />
+                    </button>
+                    
+                    {/* Dropdown Menu */}
+                    {showCameraMenu && (
+                      <div className="absolute top-12 right-0 bg-black/90 backdrop-blur-xl rounded-xl overflow-hidden shadow-2xl border border-white/20 min-w-[160px] animate-in fade-in slide-in-from-top-2 duration-200">
+                        <button
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            flipCamera(e);
+                            setShowCameraMenu(false);
+                          }}
+                          className="w-full px-4 py-3 text-left text-white hover:bg-white/10 active:bg-white/20 transition-all flex items-center space-x-3 border-b border-white/10"
+                        >
+                          <RotateCcw size={18} />
+                          <span className="text-sm font-medium">
+                            {facingMode === 'user' ? 'Rear Camera' : 'Front Camera'}
+                          </span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+                
                 <div className="absolute bottom-2 md:bottom-4 left-2 md:left-4 bg-black/70 backdrop-blur-sm text-white px-2 md:px-3 py-1 md:py-2 rounded-full text-xs md:text-sm font-medium">
                   {username || 'You'}
                 </div>
@@ -748,13 +803,14 @@ const WorkingLiveKitApp = () => {
                   ))}
                 </div>
               )}
-            </div>
+              </div>
+            )}
             
             {/* Room info */}
-            <div className="absolute top-4 left-4 bg-black/70 backdrop-blur-md rounded-xl px-4 py-2 text-white shadow-lg">
-              <div className="flex items-center space-x-3">
-                <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-                <div className="text-sm font-medium">Room {roomId}</div>
+            <div className="absolute top-2 left-2 md:top-4 md:left-4 bg-black/70 backdrop-blur-md rounded-lg md:rounded-xl px-2 py-1.5 md:px-4 md:py-2 text-white shadow-lg">
+              <div className="flex items-center space-x-2 md:space-x-3">
+                <div className="w-1.5 h-1.5 md:w-2 md:h-2 bg-green-400 rounded-full animate-pulse"></div>
+                <div className="text-xs md:text-sm font-medium">Room {roomId}</div>
                 <div className="text-xs text-white/70">•</div>
                 <div className="text-xs text-white/70">{participants.length + 1} online</div>
               </div>
@@ -763,13 +819,14 @@ const WorkingLiveKitApp = () => {
 
           {/* Pass The Aux Component - Top Center */}
           {showPassTheAux && (
-            <div className="fixed top-0 left-0 right-0 pt-safe pt-4 pointer-events-none z-50">
+            <div className="fixed top-0 left-0 right-0 pt-safe pt-4 pointer-events-none z-[1001]">
               <div className="max-w-4xl mx-auto px-4 pointer-events-auto">
                 <PassTheAux 
                   roomName={roomId} 
                   participants={participants}
                   room={room}
                   onClose={() => setShowPassTheAux(false)}
+                  onMusicStateChange={setIsMusicPlaying}
                 />
               </div>
             </div>
@@ -827,20 +884,6 @@ const WorkingLiveKitApp = () => {
                       title="Pass The Aux"
                     >
                       <Music size={22} className="md:w-6 md:h-6" />
-                    </button>
-                  )}
-                  {/* Camera flip button - mobile only */}
-                  {/Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) && (
-                    <button
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        flipCamera(e);
-                      }}
-                      className="p-3 md:p-4 rounded-xl md:rounded-2xl bg-blue-500/80 text-white active:bg-blue-500 transition-all duration-200 backdrop-blur-sm border border-white/10 active:scale-95 touch-manipulation select-none"
-                      title={`Switch to ${facingMode === 'user' ? 'rear' : 'front'} camera`}
-                    >
-                      <RotateCcw size={22} className="md:w-6 md:h-6" />
                     </button>
                   )}
 
