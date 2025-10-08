@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { storage } from '../firebase';
+import { Play, Pause, Square, Upload, X, Crown } from 'lucide-react';
 import './PassTheAux.css';
 
 const PassTheAux = ({ roomName, participants, onClose, room }) => {
@@ -15,9 +16,13 @@ const PassTheAux = ({ roomName, participants, onClose, room }) => {
     const [playlist, setPlaylist] = useState([]);
     const [uploadProgress, setUploadProgress] = useState(0);
     const [isUploading, setIsUploading] = useState(false);
+    const [isReceiving, setIsReceiving] = useState(false);
+    const [receiveProgress, setReceiveProgress] = useState(0);
+    const [showBanner, setShowBanner] = useState(true);
     
     const audioRef = useRef(null);
     const fileInputRef = useRef(null);
+    const receivedChunksRef = useRef({});
 
     // Listen for music sharing events from other users via LiveKit
     useEffect(() => {
@@ -45,14 +50,64 @@ const PassTheAux = ({ roomName, participants, onClose, room }) => {
                     console.log('🏓 PONG! Received test ping from:', message.from);
                 }
 
+                // Handle chunked music data
+                if (message.type === 'MUSIC_CHUNK') {
+                    const { transferId, chunkIndex, totalChunks, data, metadata } = message;
+                    
+                    console.log('CHUNK INFO:');
+                    console.log('  - Chunk:', chunkIndex + 1, '/', totalChunks);
+                    console.log('  - Transfer ID:', transferId);
+                    console.log('  - Song:', metadata?.name);
+                    
+                    if (!receivedChunksRef.current[transferId]) {
+                        receivedChunksRef.current[transferId] = {
+                            chunks: new Array(totalChunks),
+                            metadata: metadata,
+                            receivedCount: 0
+                        };
+                        console.log('STARTED NEW TRANSFER:', transferId);
+                        setIsReceiving(true);
+                    }
+                    
+                    receivedChunksRef.current[transferId].chunks[chunkIndex] = data;
+                    receivedChunksRef.current[transferId].receivedCount++;
+                    
+                    const progress = Math.round((receivedChunksRef.current[transferId].receivedCount / totalChunks) * 100);
+                    setReceiveProgress(progress);
+                    console.log('PROGRESS:', progress + '%');
+                    
+                    // Check if all chunks received
+                    if (receivedChunksRef.current[transferId].receivedCount === totalChunks) {
+                        console.log('ALL CHUNKS RECEIVED! Assembling...');
+                        
+                        // Assemble all chunks
+                        const fullDataUrl = receivedChunksRef.current[transferId].chunks.join('');
+                        
+                        const newSong = {
+                            url: fullDataUrl,
+                            type: 'audio',
+                            name: metadata.name,
+                            addedBy: participant?.identity || 'Someone'
+                        };
+                        
+                        console.log('✅ SONG ASSEMBLED:', newSong.name);
+                        setCurrentSong(newSong);
+                        setAuxHolder(participant?.identity || 'Someone');
+                        setPlaylist(prev => [...prev, newSong]);
+                        
+                        // Clean up
+                        delete receivedChunksRef.current[transferId];
+                        setIsReceiving(false);
+                        setReceiveProgress(0);
+                        console.log('CLEANED UP TRANSFER DATA');
+                        console.log('======================');
+                    }
+                }
+
                 // Request sync from existing users
                 if (message.type === 'REQUEST_SYNC') {
                     console.log('📡 Sync requested by:', participant?.identity);
-                    // If I have a current song, share it with the new user
-                    if (currentSong) {
-                        console.log('📤 Sending current song to new participant');
-                        broadcastMusicData(currentSong);
-                    }
+                    // The response will be handled in a separate useEffect
                 }
 
                 if (message.type === 'MUSIC_SHARE') {
@@ -109,6 +164,38 @@ const PassTheAux = ({ roomName, participants, onClose, room }) => {
         };
     }, [room]);
 
+    // Broadcast current song when participants join
+    useEffect(() => {
+        if (!room || !currentSong) return;
+
+        const handleParticipantConnected = (participant) => {
+            console.log('👋 New participant joined:', participant.identity);
+            console.log('📤 Broadcasting current song to new participant');
+            
+            // Wait a bit for their data channel to be ready
+            setTimeout(() => {
+                const message = JSON.stringify({
+                    type: 'MUSIC_SHARE',
+                    url: currentSong.url,
+                    musicType: currentSong.type,
+                    name: currentSong.name,
+                    youtubeId: currentSong.youtubeId
+                });
+
+                const encoder = new TextEncoder();
+                const data = encoder.encode(message);
+                room.localParticipant.publishData(data, { reliable: true });
+                console.log('✅ Sent current song to new participant');
+            }, 1500);
+        };
+
+        room.on('participantConnected', handleParticipantConnected);
+
+        return () => {
+            room.off('participantConnected', handleParticipantConnected);
+        };
+    }, [room, currentSong]);
+
     useEffect(() => {
         if (audioRef.current) {
             audioRef.current.volume = volume / 100;
@@ -162,7 +249,12 @@ const PassTheAux = ({ roomName, participants, onClose, room }) => {
             return;
         }
 
-        // Send Firebase URL directly (no chunking needed!)
+        // For large audio files, use chunking
+        if (songData.type === 'audio' && songData.url.length > 60000) {
+            return broadcastMusicDataChunked(songData);
+        }
+
+        // Send small data (YouTube URLs) directly
         const message = JSON.stringify({
             type: 'MUSIC_SHARE',
             url: songData.url,
@@ -176,6 +268,72 @@ const PassTheAux = ({ roomName, participants, onClose, room }) => {
         
         room.localParticipant.publishData(data, { reliable: true });
         console.log('✅ Broadcasted music URL:', songData.name);
+    };
+
+    // Broadcast large audio files in chunks (max 60KB per chunk)
+    const broadcastMusicDataChunked = async (songData) => {
+        if (!room) {
+            console.error('❌ CANNOT BROADCAST: Room is not available!');
+            return;
+        }
+
+        const CHUNK_SIZE = 60000; // 60KB chunks (safe limit)
+        const dataUrl = songData.url;
+        const transferId = `transfer_${Date.now()}_${Math.random()}`;
+        
+        // Calculate chunks
+        const totalChunks = Math.ceil(dataUrl.length / CHUNK_SIZE);
+        
+        console.log('======================');
+        console.log('SENDING MUSIC FILE');
+        console.log('Song:', songData.name);
+        console.log('Total size:', dataUrl.length, 'bytes');
+        console.log('Chunks:', totalChunks);
+        console.log('Transfer ID:', transferId);
+        console.log('======================');
+        
+        setIsUploading(true);
+        
+        // Send chunks
+        for (let i = 0; i < totalChunks; i++) {
+            const start = i * CHUNK_SIZE;
+            const end = Math.min(start + CHUNK_SIZE, dataUrl.length);
+            const chunk = dataUrl.substring(start, end);
+            
+            const message = JSON.stringify({
+                type: 'MUSIC_CHUNK',
+                transferId: transferId,
+                chunkIndex: i,
+                totalChunks: totalChunks,
+                data: chunk,
+                metadata: {
+                    name: songData.name,
+                    type: songData.type,
+                    addedBy: 'You'
+                }
+            });
+
+            const encoder = new TextEncoder();
+            const data = encoder.encode(message);
+            
+            try {
+                await room.localParticipant.publishData(data, { reliable: true });
+                const progress = Math.round(((i + 1) / totalChunks) * 100);
+                setUploadProgress(progress);
+                console.log('SENT CHUNK', i + 1, '/', totalChunks, '(' + progress + '%) - Chunk size:', chunk.length, 'bytes');
+                
+                // Small delay between chunks to avoid overwhelming the connection
+                await new Promise(resolve => setTimeout(resolve, 50));
+            } catch (error) {
+                console.error('ERROR SENDING CHUNK', i, ':', error);
+            }
+        }
+        
+        setIsUploading(false);
+        setUploadProgress(0);
+        console.log('======================');
+        console.log('ALL CHUNKS SENT!');
+        console.log('======================');
     };
 
     // Broadcast playback control
@@ -210,68 +368,50 @@ const PassTheAux = ({ roomName, participants, onClose, room }) => {
             return;
         }
 
-        console.log('✅ Room is connected, uploading to Firebase...');
+        console.log('✅ Room is connected, converting file to base64...');
         setIsUploading(true);
         setUploadProgress(0);
 
-        try {
-            // Create a unique filename
-            const timestamp = Date.now();
-            const filename = `music/${timestamp}_${file.name}`;
-            const storageRef = ref(storage, filename);
-
-            // Upload file to Firebase Storage with progress tracking
-            const uploadTask = uploadBytesResumable(storageRef, file);
-
-            uploadTask.on('state_changed',
-                (snapshot) => {
-                    // Track upload progress
-                    const progress = Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100);
-                    setUploadProgress(progress);
-                    console.log('Upload progress:', progress + '%');
-                },
-                (error) => {
-                    // Handle upload error
-                    console.error('❌ Firebase upload error:', error);
-                    alert('Failed to upload file: ' + error.message);
-                    setIsUploading(false);
-                    setUploadProgress(0);
-                },
-                async () => {
-                    // Upload complete - get download URL
-                    const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-                    console.log('✅ File uploaded! Download URL:', downloadURL);
-
-                    const newSong = {
-                        url: downloadURL,
-                        type: 'audio',
-                        name: file.name,
-                        addedBy: 'You'
-                    };
-
-                    const newPlaylist = [...playlist, newSong];
-                    setPlaylist(newPlaylist);
-
-                    if (!currentSong) {
-                        console.log('Setting current song:', newSong.name);
-                        setCurrentSong(newSong);
-                        setAuxHolder('You');
-
-                        // Broadcast the Firebase URL (tiny message, no chunking needed!)
-                        broadcastMusicData(newSong);
-                    }
-
-                    setIsUploading(false);
-                    setUploadProgress(0);
-                    handleCloseModal();
-                }
-            );
-        } catch (error) {
-            console.error('❌ Upload error:', error);
-            alert('Failed to upload file: ' + error.message);
+        // Convert file to base64 data URL
+        const reader = new FileReader();
+        
+        reader.onload = async (event) => {
+            const dataUrl = event.target.result;
+            
+            const newSong = {
+                url: dataUrl, // Base64 data URL
+                type: 'audio',
+                name: file.name,
+                addedBy: 'You'
+            };
+            
+            console.log('✅ File converted to base64');
+            
+            const newPlaylist = [...playlist, newSong];
+            setPlaylist(newPlaylist);
+            
+            if (!currentSong) {
+                console.log('Setting current song:', newSong.name);
+                setCurrentSong(newSong);
+                setAuxHolder('You');
+                
+                // Broadcast using chunking (for large files)
+                await broadcastMusicDataChunked(newSong);
+            }
+            
             setIsUploading(false);
             setUploadProgress(0);
-        }
+            handleCloseModal();
+        };
+        
+        reader.onerror = (error) => {
+            console.error('❌ File read error:', error);
+            alert('Failed to read file');
+            setIsUploading(false);
+            setUploadProgress(0);
+        };
+        
+        reader.readAsDataURL(file);
     };
 
     const handleURLSubmit = (e) => {
@@ -395,49 +535,98 @@ const PassTheAux = ({ roomName, participants, onClose, room }) => {
                 </div>
             )}
 
-            {/* Aux Status Header with integrated controls */}
-            <div className="aux-status">
-                <span className="crown-icon">👑</span>
-                <span className="aux-text">
-                    {currentSong ? (
-                        <>
-                            <span className="now-playing-label">Now Playing:</span>
-                            <span className="song-name-inline">{currentSong.name}</span>
-                            <span className="dj-label"> • DJ: {auxHolder || 'Unknown'}</span>
-                        </>
-                    ) : (
-                        auxHolder ? `${auxHolder} has the aux` : 'Nobody has the aux right now...'
+            {/* Glassmorphic Music Banner */}
+            {showBanner && (
+                <div className="music-banner-glass">
+                    {/* Music Visualizer Animation */}
+                    {isPlaying && (
+                        <div className="music-visualizer">
+                            <div className="visualizer-bar"></div>
+                            <div className="visualizer-bar"></div>
+                            <div className="visualizer-bar"></div>
+                            <div className="visualizer-bar"></div>
+                            <div className="visualizer-bar"></div>
+                        </div>
                     )}
-                </span>
-                
-                {/* Show controls for everyone when music is playing */}
-                {currentSong && (
-                    <div className="admin-controls">
-                        {currentSong.type === 'audio' && (
-                            <button 
-                                onClick={togglePlayPause} 
-                                className="control-btn-mini"
-                                title={isPlaying ? 'Pause' : 'Play'}
-                            >
-                                {isPlaying ? '⏸️' : '▶️'}
-                            </button>
+
+                    <div className="banner-content">
+                        {/* Crown Icon */}
+                        <div className="crown-container">
+                            <Crown className="crown-icon-glass" size={24} strokeWidth={2.5} />
+                        </div>
+
+                        {/* Song Info */}
+                        <div className="song-info-glass">
+                            {currentSong ? (
+                                <>
+                                    <div className="now-playing-text">NOW PLAYING</div>
+                                    <div className="song-title-glass">{currentSong.name}</div>
+                                    <div className="dj-name-glass">DJ: {auxHolder || 'Unknown'}</div>
+                                </>
+                            ) : (
+                                <>
+                                    <div className="no-aux-text">Nobody has the aux right now...</div>
+                                    <button 
+                                        className="take-control-btn"
+                                        onClick={() => setShowMusicModal(true)}
+                                    >
+                                        <Upload size={16} />
+                                        Take Control
+                                    </button>
+                                </>
+                            )}
+                        </div>
+
+                        {/* Control Buttons */}
+                        {currentSong && (
+                            <div className="glass-controls">
+                                {currentSong.type === 'audio' && (
+                                    <button 
+                                        onClick={togglePlayPause} 
+                                        className="glass-btn play-pause-btn"
+                                        title={isPlaying ? 'Pause' : 'Play'}
+                                    >
+                                        {isPlaying ? <Pause size={20} fill="currentColor" /> : <Play size={20} fill="currentColor" />}
+                                    </button>
+                                )}
+                                <button 
+                                    onClick={() => {
+                                        setCurrentSong(null);
+                                        setAuxHolder(null);
+                                        setPlaylist([]);
+                                        setIsPlaying(false);
+                                        broadcastPlaybackControl('stop');
+                                    }} 
+                                    className="glass-btn stop-btn"
+                                    title="Stop and clear"
+                                >
+                                    <Square size={18} fill="currentColor" />
+                                </button>
+                            </div>
                         )}
+
+                        {/* Close Button */}
                         <button 
-                            onClick={() => {
-                                setCurrentSong(null);
-                                setAuxHolder(null);
-                                setPlaylist([]);
-                                setIsPlaying(false);
-                                broadcastPlaybackControl('stop');
-                            }} 
-                            className="control-btn-mini quit-btn"
-                            title="Stop and clear"
+                            className="glass-btn close-btn-glass"
+                            onClick={() => setShowBanner(false)}
+                            title="Minimize"
                         >
-                            ⏹️
+                            <X size={18} />
                         </button>
                     </div>
-                )}
-            </div>
+                </div>
+            )}
+
+            {/* Minimized Indicator - Show when banner is hidden but music is playing */}
+            {!showBanner && currentSong && (
+                <button 
+                    className="minimized-music-indicator"
+                    onClick={() => setShowBanner(true)}
+                >
+                    <Crown size={18} />
+                    <span>{isPlaying ? '♫' : '❚❚'}</span>
+                </button>
+            )}
 
             {/* Hidden audio element */}
             {currentSong && currentSong.type === 'audio' && (

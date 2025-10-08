@@ -673,10 +673,14 @@ const WorkingLiveKitApp = () => {
           <div className="flex-1 relative overflow-hidden pb-32 md:pb-24">
             
             {/* Desktop: Side-by-side grid, Mobile: Vertical stack */}
-            <div className="h-full p-2 md:p-4 flex flex-col md:flex-row md:items-center md:justify-center gap-2 md:gap-4">
+            <div className={`h-full p-2 md:p-4 flex flex-col md:flex-row md:items-center md:justify-center gap-2 md:gap-4 transition-all duration-500 ${
+              showPassTheAux ? 'mt-20 md:mt-24' : ''
+            }`}>
               
               {/* Local video */}
-              <div className="relative bg-gradient-to-br from-blue-900/30 to-purple-900/30 rounded-xl md:rounded-2xl overflow-hidden shadow-xl flex-1 md:max-w-md h-48 md:h-96">
+              <div className={`relative bg-gradient-to-br from-blue-900/30 to-purple-900/30 rounded-xl md:rounded-2xl overflow-hidden shadow-xl flex-1 transition-all duration-500 ${
+                showPassTheAux ? 'md:max-w-xs h-32 md:h-64' : 'md:max-w-md h-48 md:h-96'
+              }`}>
                 <video
                   ref={localVideoRef}
                   autoPlay
@@ -708,11 +712,15 @@ const WorkingLiveKitApp = () => {
 
               {/* Remote participants - show first participant or placeholder */}
               {participants.length > 0 ? (
-                <div className="flex-1 md:max-w-md h-48 md:h-96 rounded-xl md:rounded-2xl overflow-hidden shadow-xl">
+                <div className={`flex-1 rounded-xl md:rounded-2xl overflow-hidden shadow-xl transition-all duration-500 ${
+                  showPassTheAux ? 'md:max-w-xs h-32 md:h-64' : 'md:max-w-md h-48 md:h-96'
+                }`}>
                   <RemoteParticipantVideo participant={participants[0]} />
                 </div>
               ) : (
-                <div className="relative bg-gradient-to-br from-purple-900/30 to-pink-900/30 rounded-xl md:rounded-2xl overflow-hidden shadow-xl flex-1 md:max-w-md h-48 md:h-96 flex items-center justify-center">
+                <div className={`relative bg-gradient-to-br from-purple-900/30 to-pink-900/30 rounded-xl md:rounded-2xl overflow-hidden shadow-xl flex-1 flex items-center justify-center transition-all duration-500 ${
+                  showPassTheAux ? 'md:max-w-xs h-32 md:h-64' : 'md:max-w-md h-48 md:h-96'
+                }`}>
                   <div className="text-center text-white relative">
                     {/* Pulsing border */}
                     <div className="absolute inset-0 rounded-xl border-2 border-purple-400/30 animate-pulse"></div>
@@ -753,22 +761,24 @@ const WorkingLiveKitApp = () => {
             </div>
           </div>
 
+          {/* Pass The Aux Component - Top Center */}
+          {showPassTheAux && (
+            <div className="fixed top-0 left-0 right-0 pt-safe pt-4 pointer-events-none z-50">
+              <div className="max-w-4xl mx-auto px-4 pointer-events-auto">
+                <PassTheAux 
+                  roomName={roomId} 
+                  participants={participants}
+                  room={room}
+                  onClose={() => setShowPassTheAux(false)}
+                />
+              </div>
+            </div>
+          )}
+
           {/* iOS-style Glassmorphic Controls - Fixed at bottom, always visible */}
           <div className="fixed bottom-0 left-0 right-0 pb-safe pb-6 md:pb-8 pointer-events-none z-50">
             <div className="max-w-6xl mx-auto px-4 pointer-events-auto">
               
-              {/* Pass The Aux Component */}
-              {showPassTheAux && (
-                <div className="mb-4">
-                  <PassTheAux 
-                    roomName={roomId} 
-                    participants={participants}
-                    room={room}
-                    onClose={() => setShowPassTheAux(false)}
-                  />
-                </div>
-              )}
-
               <div className="bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl md:rounded-3xl p-3 md:p-4 shadow-2xl mx-auto w-fit">
                 <div className="flex items-center justify-center space-x-3 md:space-x-4">
                   <button
