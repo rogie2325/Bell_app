@@ -17,7 +17,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { roomName, participantName } = req.body;
+    const { roomName, participantName, metadata } = req.body;
     
     if (!roomName || !participantName) {
       return res.status(400).json({ error: 'Missing parameters' });
@@ -34,6 +34,7 @@ export default async function handler(req, res) {
     const at = new AccessToken(LIVEKIT_API_KEY, LIVEKIT_SECRET, {
       identity: participantName,
       ttl: '1h',
+      metadata: metadata || '', // Add metadata to the token
     });
 
     at.addGrant({

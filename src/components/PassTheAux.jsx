@@ -33,6 +33,14 @@ const PassTheAux = ({ roomName, participants, onClose, room, onMusicStateChange 
         console.log('  - Room state:', room?.state);
         console.log('  - Room name:', room?.name);
         console.log('  - Local participant:', room?.localParticipant?.identity);
+        
+        // Auto-test connection in background when room is ready
+        if (room && room.state === 'connected' && room.localParticipant) {
+            setTimeout(() => {
+                console.log('🔄 Running automatic connection test...');
+                testBroadcast();
+            }, 2000); // Wait 2 seconds after mounting to ensure everything is ready
+        }
     }, [room]);
 
     // Listen for music sharing events from other users via LiveKit
@@ -280,26 +288,45 @@ const PassTheAux = ({ roomName, participants, onClose, room, onMusicStateChange 
 
     useEffect(() => {
         if (audioRef.current) {
-            const updateTime = () => setCurrentTime(audioRef.current.currentTime);
-            const updateDuration = () => setDuration(audioRef.current.duration);
+            const audio = audioRef.current;
+            
+            const updateTime = () => {
+                if (audio && !isNaN(audio.currentTime)) {
+                    setCurrentTime(audio.currentTime);
+                }
+            };
+            
+            const updateDuration = () => {
+                if (audio && !isNaN(audio.duration)) {
+                    setDuration(audio.duration);
+                }
+            };
+            
             const handleEnded = () => {
                 setIsPlaying(false);
                 playNextSong();
             };
 
-            audioRef.current.addEventListener('timeupdate', updateTime);
-            audioRef.current.addEventListener('loadedmetadata', updateDuration);
-            audioRef.current.addEventListener('ended', handleEnded);
+            audio.addEventListener('timeupdate', updateTime);
+            audio.addEventListener('loadedmetadata', updateDuration);
+            audio.addEventListener('durationchange', updateDuration);
+            audio.addEventListener('ended', handleEnded);
+            
+            // Update duration immediately if already loaded
+            if (audio.duration && !isNaN(audio.duration)) {
+                setDuration(audio.duration);
+            }
 
             return () => {
-                if (audioRef.current) {
-                    audioRef.current.removeEventListener('timeupdate', updateTime);
-                    audioRef.current.removeEventListener('loadedmetadata', updateDuration);
-                    audioRef.current.removeEventListener('ended', handleEnded);
+                if (audio) {
+                    audio.removeEventListener('timeupdate', updateTime);
+                    audio.removeEventListener('loadedmetadata', updateDuration);
+                    audio.removeEventListener('durationchange', updateDuration);
+                    audio.removeEventListener('ended', handleEnded);
                 }
             };
         }
-    }, []);
+    }, [currentSong]); // Re-attach listeners when song changes
 
     const handleCloseModal = () => {
         setShowMusicModal(false);
@@ -456,10 +483,9 @@ const PassTheAux = ({ roomName, participants, onClose, room, onMusicStateChange 
         }
     };
 
-    // Test function to verify data channel works
+    // Test function to verify data channel works (runs silently in background)
     const testBroadcast = () => {
-        alert('🧪 TEST FUNCTION CALLED!');
-        console.log('🧪 TEST BROADCAST - Starting diagnostic...');
+        console.log('🧪 AUTO-TEST: Starting connection diagnostic...');
         console.log('  - Room exists:', !!room);
         console.log('  - Room state:', room?.state);
         console.log('  - Local participant exists:', !!room?.localParticipant);
@@ -468,8 +494,7 @@ const PassTheAux = ({ roomName, participants, onClose, room, onMusicStateChange 
         console.log('  - Permissions:', room?.localParticipant?.permissions);
         
         if (!room || !room.localParticipant) {
-            console.error('❌ TEST FAILED: Room or local participant not available');
-            alert('Room not ready for broadcasting');
+            console.error('❌ AUTO-TEST FAILED: Room or local participant not available');
             return;
         }
 
@@ -955,29 +980,6 @@ const PassTheAux = ({ roomName, participants, onClose, room, onMusicStateChange 
 
                         <div className="modal-footer">
                             <p className="modal-hint">💡 Tip: All participants will hear your music in sync!</p>
-                            
-                            {/* Debug: Test Broadcast Button */}
-                            <button 
-                                onClick={(e) => {
-                                    e.preventDefault();
-                                    e.stopPropagation();
-                                    testBroadcast();
-                                }}
-                                className="test-broadcast-btn"
-                                style={{
-                                    marginTop: '16px',
-                                    padding: '10px 20px',
-                                    background: 'rgba(255, 255, 255, 0.1)',
-                                    border: '1px solid rgba(255, 255, 255, 0.3)',
-                                    borderRadius: '12px',
-                                    color: 'white',
-                                    fontSize: '13px',
-                                    cursor: 'pointer',
-                                    width: '100%'
-                                }}
-                            >
-                                🧪 Test Broadcast Connection
-                            </button>
                         </div>
                     </div>
                 </div>

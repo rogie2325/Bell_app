@@ -36,55 +36,50 @@ const FeatureAnnouncement = () => {
                 
                 <div className="announcement-header">
                     <span className="announcement-icon">👑</span>
-                    <h2>🎵 NEW: Who Has Aux? 🎵</h2>
+                    <h2>🎵 Pass The Aux 🎵</h2>
                     <p className="announcement-subtitle">Take control of the party!</p>
                 </div>
 
                 <div className="announcement-features">
-                    <div className="feature-item">
+                    <div className="feature-item highlight">
                         <span className="feature-icon">🎵</span>
                         <div className="feature-text">
-                            <strong>Share Music:</strong> Upload your songs and become the DJ
-                        </div>
-                    </div>
-
-                    <div className="feature-item">
-                        <span className="feature-icon">📺</span>
-                        <div className="feature-text">
-                            <strong>YouTube Videos:</strong> Watch together with friends
-                        </div>
-                    </div>
-
-                    <div className="feature-item">
-                        <span className="feature-icon">🖥️</span>
-                        <div className="feature-text">
-                            <strong>Screen Share:</strong> Show your screen to everyone
+                            <strong>Share Music:</strong> Upload MP3, WAV, M4A files and become the DJ
                         </div>
                     </div>
 
                     <div className="feature-item highlight">
-                        <span className="feature-icon">👑</span>
+                        <span className="feature-icon">�</span>
                         <div className="feature-text">
-                            <strong>Aux Status:</strong> Everyone can see who's in control!
+                            <strong>Aux Status:</strong> Everyone sees who's controlling the music!
+                        </div>
+                    </div>
+
+                    <div className="feature-item highlight">
+                        <span className="feature-icon">❤️</span>
+                        <div className="feature-text">
+                            <strong>React Together:</strong> Send ❤️ 🔥 👍 😂 and watch them float!
                         </div>
                     </div>
                 </div>
 
                 <div className="pro-tip-announcement">
-                    <span className="tip-icon">🔥</span>
+                    <span className="tip-icon">✨</span>
                     <div>
-                        <strong>Pro Tip</strong>
-                        <p>Vote 🔥 or 🗑️ on songs and see reactions fly across the screen!</p>
+                        <strong>How It Works</strong>
+                        <p>Click the 🎵 button, upload your music, and everyone hears it in sync!</p>
                     </div>
                 </div>
 
-                <button className="get-started-btn" onClick={handleGetStarted}>
-                    🎉 Let's Get Started!
-                </button>
+                <div className="announcement-buttons">
+                    <button className="get-started-btn" onClick={handleGetStarted}>
+                        🎉 Let's Go!
+                    </button>
 
-                <button className="skip-btn" onClick={handleClose}>
-                    Maybe Later
-                </button>
+                    <button className="skip-btn" onClick={handleClose}>
+                        Maybe Later
+                    </button>
+                </div>
             </div>
         </div>
     );

@@ -13,15 +13,19 @@ import {
   createLocalAudioTrack,
 } from 'livekit-client';
 import { DotLottieReact } from '@lottiefiles/dotlottie-react';
+import { useAuth } from '../contexts/AuthContext';
 import InstallPrompt from './InstallPrompt';
 import PassTheAux from './PassTheAux';
 import FeatureAnnouncement from './FeatureAnnouncement';
+import UserProfile from './UserProfile';
 
 const WorkingLiveKitApp = () => {
+  const { currentUser } = useAuth();
+  
   // State
   const [isConnected, setIsConnected] = useState(false);
   const [roomId, setRoomId] = useState('');
-  const [username, setUsername] = useState('');
+  const [username, setUsername] = useState(currentUser?.displayName || currentUser?.email?.split('@')[0] || '');
   const [participants, setParticipants] = useState([]);
   const [isVideoEnabled, setIsVideoEnabled] = useState(true);
   const [isAudioEnabled, setIsAudioEnabled] = useState(true);
@@ -30,8 +34,8 @@ const WorkingLiveKitApp = () => {
   const [audioContext, setAudioContext] = useState(null);
   const [facingMode, setFacingMode] = useState('user'); // 'user' for front camera, 'environment' for rear camera
   const [showPassTheAux, setShowPassTheAux] = useState(false);
-  const [showCameraMenu, setShowCameraMenu] = useState(false); // For camera dropdown menu
   const [isMusicPlaying, setIsMusicPlaying] = useState(false); // Track if music is playing
+  const [showUserProfile, setShowUserProfile] = useState(false);
 
   // LiveKit state
   const [room, setRoom] = useState(null);
@@ -50,19 +54,43 @@ const WorkingLiveKitApp = () => {
   console.log('LiveKit URL:', LIVEKIT_URL);
   console.log('Environment VITE_LIVEKIT_URL:', import.meta.env.VITE_LIVEKIT_URL);
 
-  // Close camera menu when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (showCameraMenu && !event.target.closest('.camera-menu-container')) {
-        setShowCameraMenu(false);
-      }
-    };
-
-    if (showCameraMenu) {
-      document.addEventListener('click', handleClickOutside);
-      return () => document.removeEventListener('click', handleClickOutside);
+  // Helper function to safely parse participant metadata
+  const getParticipantMetadata = (participant) => {
+    if (!participant) {
+      console.log('❌ No participant provided to getParticipantMetadata');
+      return null;
     }
-  }, [showCameraMenu]);
+    
+    console.log('🔍 Getting metadata for participant:', participant.identity);
+    console.log('   Raw metadata:', participant.metadata);
+    
+    if (!participant.metadata) {
+      console.log('❌ No metadata found for', participant.identity);
+      return null;
+    }
+    
+    try {
+      const parsed = JSON.parse(participant.metadata);
+      console.log('✅ Parsed metadata for', participant.identity, ':', parsed);
+      if (parsed.photoURL) {
+        console.log('📸 Photo URL found:', parsed.photoURL);
+      } else {
+        console.log('⚠️ No photoURL in metadata for', participant.identity);
+      }
+      return parsed;
+    } catch (e) {
+      console.error('❌ Failed to parse metadata for', participant.identity, ':', e);
+      console.error('   Raw metadata was:', participant.metadata);
+      return null;
+    }
+  };
+
+  // Update username when currentUser changes
+  useEffect(() => {
+    if (currentUser && !username) {
+      setUsername(currentUser.displayName || currentUser.email?.split('@')[0] || '');
+    }
+  }, [currentUser]);
 
   // Initialize audio context for mobile
   const initializeAudioContext = () => {
@@ -136,8 +164,14 @@ const WorkingLiveKitApp = () => {
         body: JSON.stringify({
           roomName: roomId,
           participantName: username,
+          metadata: JSON.stringify({
+            photoURL: currentUser?.photoURL || null,
+            bio: currentUser?.bio || null,
+          }),
         }),
       });
+
+      console.log('📋 Current user photoURL:', currentUser?.photoURL);
 
       if (!response.ok) {
         throw new Error(`Token request failed: ${response.status}`);
@@ -519,9 +553,27 @@ const WorkingLiveKitApp = () => {
             
             <div className="text-center text-white relative z-10">
               <div className="relative inline-block">
-                <User size={isSmall ? 32 : 64} className="mx-auto mb-2 opacity-70" />
-                {/* Pulsing ring around icon */}
-                <div className="absolute inset-0 rounded-full border-2 border-blue-400/50 animate-ping"></div>
+                {/* Profile picture with pulsing effect */}
+                {(() => {
+                  const metadata = getParticipantMetadata(participant);
+                  return metadata?.photoURL ? (
+                    <div className="relative">
+                      <img 
+                        src={metadata.photoURL} 
+                        alt={participant.identity}
+                        className={`${isSmall ? 'w-16 h-16' : 'w-24 h-24'} rounded-full object-cover mx-auto mb-2 border-4 border-blue-400/50 shadow-lg`}
+                      />
+                      {/* Pulsing ring around profile pic */}
+                      <div className="absolute inset-0 rounded-full border-4 border-blue-400/50 animate-ping"></div>
+                    </div>
+                  ) : (
+                    <>
+                      <User size={isSmall ? 32 : 64} className="mx-auto mb-2 opacity-70" />
+                      {/* Pulsing ring around icon */}
+                      <div className="absolute inset-0 rounded-full border-2 border-blue-400/50 animate-ping"></div>
+                    </>
+                  );
+                })()}
               </div>
               {!isSmall && (
                 <>
@@ -533,7 +585,18 @@ const WorkingLiveKitApp = () => {
           </div>
         )}
         
-        <div className={`absolute ${isSmall ? 'bottom-1 left-1' : 'bottom-3 left-3'} bg-black/70 backdrop-blur-sm text-white ${isSmall ? 'px-2 py-0.5' : 'px-3 py-1'} rounded-full ${isSmall ? 'text-xs' : 'text-sm'} font-medium flex items-center space-x-1`}>
+        <div className={`absolute ${isSmall ? 'bottom-1 left-1' : 'bottom-3 left-3'} bg-black/70 backdrop-blur-sm text-white ${isSmall ? 'px-2 py-0.5' : 'px-3 py-1'} rounded-full ${isSmall ? 'text-xs' : 'text-sm'} font-medium flex items-center space-x-2`}>
+          {/* Profile picture next to name */}
+          {(() => {
+            const metadata = getParticipantMetadata(participant);
+            return metadata?.photoURL ? (
+              <img 
+                src={metadata.photoURL} 
+                alt={participant.identity}
+                className={`${isSmall ? 'w-5 h-5' : 'w-6 h-6'} rounded-full object-cover border-2 border-white/30`}
+              />
+            ) : null;
+          })()}
           <span>{isSmall ? (participant.identity || participant.name).split(' ')[0] : (participant.identity || participant.name)}</span>
           {hasAudio && <span className="text-green-400 text-xs">🎤</span>}
         </div>
@@ -622,8 +685,25 @@ const WorkingLiveKitApp = () => {
       )}
 
       {!isConnected ? (
-        // Login screen
+        // Welcome screen
         <div className="bg-white/10 backdrop-blur-md rounded-2xl p-8 max-w-md w-full z-10 relative">
+          {/* Profile button in top-right */}
+          <button
+            onClick={() => setShowUserProfile(true)}
+            className="absolute top-4 right-4 bg-white/20 backdrop-blur-md rounded-full p-2 text-white shadow-lg hover:bg-white/30 transition-all active:scale-95 border border-white/20"
+            title="Profile"
+          >
+            {currentUser?.photoURL ? (
+              <img 
+                src={currentUser.photoURL} 
+                alt="Profile" 
+                className="w-8 h-8 rounded-full"
+              />
+            ) : (
+              <User size={20} />
+            )}
+          </button>
+
           <div className="text-center mb-6">
             {/* Lottie Animation */}
             <div className="w-24 h-24 mx-auto mb-4">
@@ -637,6 +717,9 @@ const WorkingLiveKitApp = () => {
             <h1 className="text-3xl font-bold text-white">
               Welcome To Bell
             </h1>
+            <p className="text-white/80 text-sm mt-2">
+              Hi, {currentUser?.displayName || currentUser?.email?.split('@')[0] || 'User'}! 👋
+            </p>
           </div>
           
           {error && (
@@ -647,6 +730,7 @@ const WorkingLiveKitApp = () => {
           
           <div className="space-y-4">
             <div>
+              <label className="block text-white/70 text-sm mb-2 ml-1">Your Name</label>
               <input
                 type="text"
                 placeholder="Enter your name"
@@ -657,6 +741,7 @@ const WorkingLiveKitApp = () => {
             </div>
             
             <div>
+              <label className="block text-white/70 text-sm mb-2 ml-1">Room ID</label>
               <input
                 type="text"
                 placeholder="Enter room ID"
@@ -669,7 +754,7 @@ const WorkingLiveKitApp = () => {
             <button
               onClick={connectToRoom}
               disabled={!roomId || !username || isConnecting}
-              className="w-full bg-gradient-to-r from-green-600 to-blue-600 hover:from-green-700 hover:to-blue-700 text-white font-semibold py-3 rounded-lg transition-all disabled:opacity-50"
+              className="w-full bg-gradient-to-r from-green-600 to-blue-600 hover:from-green-700 hover:to-blue-700 text-white font-semibold py-3 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isConnecting ? 'Connecting...' : 'Join Room'}
             </button>
@@ -686,7 +771,7 @@ const WorkingLiveKitApp = () => {
         // Video call interface - Side-by-side layout like screenshot
         <div className="w-full h-screen flex flex-col relative">
           {/* Main video area */}
-          <div className="flex-1 relative overflow-hidden pb-32 md:pb-24">
+          <div className="flex-1 relative overflow-hidden pb-28 md:pb-24">
             
             {/* Hide videos completely when music is playing */}
             {!isMusicPlaying && (
@@ -697,7 +782,7 @@ const WorkingLiveKitApp = () => {
                 
                 {/* Local video */}
                 <div className={`relative bg-gradient-to-br from-blue-900/30 to-purple-900/30 rounded-xl md:rounded-2xl overflow-hidden shadow-xl flex-1 transition-all duration-500 ${
-                  showPassTheAux ? 'md:max-w-xs h-32 md:h-64' : 'md:max-w-md h-48 md:h-96'
+                  showPassTheAux ? 'md:max-w-xs max-h-40 md:h-64' : 'md:max-w-md max-h-72 md:h-96'
                 }`}>
                 <video
                   ref={localVideoRef}
@@ -707,44 +792,33 @@ const WorkingLiveKitApp = () => {
                   className="w-full h-full object-cover"
                 />
                 
-                {/* Camera Menu Button - Mobile Only, Top Right */}
+                {/* Camera Flip Button - Mobile Only, Top Right */}
                 {/Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) && (
-                  <div className="absolute top-2 right-2 z-20 camera-menu-container">
+                  <div className="absolute top-2 right-2 z-20">
                     <button
                       onClick={(e) => {
                         e.preventDefault();
                         e.stopPropagation();
-                        setShowCameraMenu(!showCameraMenu);
+                        flipCamera(e);
                       }}
                       className="p-2 bg-black/50 backdrop-blur-sm rounded-lg text-white active:bg-black/70 transition-all duration-200 border border-white/20 active:scale-95"
+                      title={facingMode === 'user' ? 'Switch to Rear Camera' : 'Switch to Front Camera'}
                     >
-                      <MoreVertical size={20} />
+                      <RotateCcw size={20} />
                     </button>
-                    
-                    {/* Dropdown Menu */}
-                    {showCameraMenu && (
-                      <div className="absolute top-12 right-0 bg-black/90 backdrop-blur-xl rounded-xl overflow-hidden shadow-2xl border border-white/20 min-w-[160px] animate-in fade-in slide-in-from-top-2 duration-200">
-                        <button
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            flipCamera(e);
-                            setShowCameraMenu(false);
-                          }}
-                          className="w-full px-4 py-3 text-left text-white hover:bg-white/10 active:bg-white/20 transition-all flex items-center space-x-3 border-b border-white/10"
-                        >
-                          <RotateCcw size={18} />
-                          <span className="text-sm font-medium">
-                            {facingMode === 'user' ? 'Rear Camera' : 'Front Camera'}
-                          </span>
-                        </button>
-                      </div>
-                    )}
                   </div>
                 )}
                 
-                <div className="absolute bottom-2 md:bottom-4 left-2 md:left-4 bg-black/70 backdrop-blur-sm text-white px-2 md:px-3 py-1 md:py-2 rounded-full text-xs md:text-sm font-medium">
-                  {username || 'You'}
+                <div className="absolute bottom-2 md:bottom-4 left-2 md:left-4 bg-black/70 backdrop-blur-sm text-white px-2 md:px-3 py-1 md:py-2 rounded-full text-xs md:text-sm font-medium flex items-center space-x-2">
+                  {/* Profile picture next to name */}
+                  {currentUser?.photoURL && (
+                    <img 
+                      src={currentUser.photoURL} 
+                      alt={username}
+                      className="w-5 h-5 md:w-6 md:h-6 rounded-full object-cover border-2 border-white/30"
+                    />
+                  )}
+                  <span>{username || 'You'}</span>
                 </div>
                 {!isVideoEnabled && (
                   <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
@@ -754,9 +828,24 @@ const WorkingLiveKitApp = () => {
                       
                       <div className="relative z-10">
                         <div className="relative inline-block">
-                          <VideoOff size={40} className="md:w-16 md:h-16 mx-auto mb-2 opacity-70" />
-                          {/* Pulsing ring around icon */}
-                          <div className="absolute inset-0 rounded-full border-2 border-blue-400/50 animate-ping"></div>
+                          {/* Show profile picture with pulsing effect when camera is off */}
+                          {currentUser?.photoURL ? (
+                            <div className="relative">
+                              <img 
+                                src={currentUser.photoURL} 
+                                alt={username}
+                                className="w-20 h-20 md:w-32 md:h-32 rounded-full object-cover mx-auto mb-2 border-4 border-blue-400/50 shadow-lg"
+                              />
+                              {/* Pulsing ring around profile pic */}
+                              <div className="absolute inset-0 rounded-full border-4 border-blue-400/50 animate-ping"></div>
+                            </div>
+                          ) : (
+                            <>
+                              <VideoOff size={40} className="md:w-16 md:h-16 mx-auto mb-2 opacity-70" />
+                              {/* Pulsing ring around icon */}
+                              <div className="absolute inset-0 rounded-full border-2 border-blue-400/50 animate-ping"></div>
+                            </>
+                          )}
                         </div>
                         <div className="text-sm md:text-base font-medium mt-2">Camera Off</div>
                       </div>
@@ -768,13 +857,13 @@ const WorkingLiveKitApp = () => {
               {/* Remote participants - show first participant or placeholder */}
               {participants.length > 0 ? (
                 <div className={`flex-1 rounded-xl md:rounded-2xl overflow-hidden shadow-xl transition-all duration-500 ${
-                  showPassTheAux ? 'md:max-w-xs h-32 md:h-64' : 'md:max-w-md h-48 md:h-96'
+                  showPassTheAux ? 'md:max-w-xs max-h-40 md:h-64' : 'md:max-w-md max-h-72 md:h-96'
                 }`}>
                   <RemoteParticipantVideo participant={participants[0]} />
                 </div>
               ) : (
                 <div className={`relative bg-gradient-to-br from-purple-900/30 to-pink-900/30 rounded-xl md:rounded-2xl overflow-hidden shadow-xl flex-1 flex items-center justify-center transition-all duration-500 ${
-                  showPassTheAux ? 'md:max-w-xs h-32 md:h-64' : 'md:max-w-md h-48 md:h-96'
+                  showPassTheAux ? 'md:max-w-xs max-h-40 md:h-64' : 'md:max-w-md max-h-72 md:h-96'
                 }`}>
                   <div className="text-center text-white relative">
                     {/* Pulsing border */}
@@ -815,6 +904,23 @@ const WorkingLiveKitApp = () => {
                 <div className="text-xs text-white/70">{participants.length + 1} online</div>
               </div>
             </div>
+
+            {/* User Profile Button */}
+            <button
+              onClick={() => setShowUserProfile(true)}
+              className="absolute top-2 right-2 md:top-4 md:right-4 bg-black/70 backdrop-blur-md rounded-full p-2 md:p-3 text-white shadow-lg hover:bg-black/80 transition-all active:scale-95"
+              title="Profile"
+            >
+              {currentUser?.photoURL ? (
+                <img 
+                  src={currentUser.photoURL} 
+                  alt="Profile" 
+                  className="w-6 h-6 md:w-8 md:h-8 rounded-full"
+                />
+              ) : (
+                <User size={20} className="md:w-6 md:h-6" />
+              )}
+            </button>
           </div>
 
           {/* Pass The Aux Component - Top Center */}
@@ -909,6 +1015,9 @@ const WorkingLiveKitApp = () => {
       
       {/* Feature Announcement */}
       {isConnected && <FeatureAnnouncement />}
+      
+      {/* User Profile Modal */}
+      {showUserProfile && <UserProfile onClose={() => setShowUserProfile(false)} />}
     </div>
   );
 };
