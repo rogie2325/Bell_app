@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   Camera, Mic, MicOff, Video, VideoOff, Phone, Users, MessageCircle, 
-  Settings, Send, X, PhoneOff, User, RotateCcw
+  Settings, Send, X, PhoneOff, User, RotateCcw, Music
 } from 'lucide-react';
 import {
   Room,
@@ -14,6 +14,8 @@ import {
 } from 'livekit-client';
 import { DotLottieReact } from '@lottiefiles/dotlottie-react';
 import InstallPrompt from './InstallPrompt';
+import PassTheAux from './PassTheAux';
+import FeatureAnnouncement from './FeatureAnnouncement';
 
 const WorkingLiveKitApp = () => {
   // State
@@ -27,6 +29,7 @@ const WorkingLiveKitApp = () => {
   const [isConnecting, setIsConnecting] = useState(false);
   const [audioContext, setAudioContext] = useState(null);
   const [facingMode, setFacingMode] = useState('user'); // 'user' for front camera, 'environment' for rear camera
+  const [showPassTheAux, setShowPassTheAux] = useState(false);
 
   // LiveKit state
   const [room, setRoom] = useState(null);
@@ -753,6 +756,19 @@ const WorkingLiveKitApp = () => {
           {/* iOS-style Glassmorphic Controls - Fixed at bottom, always visible */}
           <div className="fixed bottom-0 left-0 right-0 pb-safe pb-6 md:pb-8 pointer-events-none z-50">
             <div className="max-w-6xl mx-auto px-4 pointer-events-auto">
+              
+              {/* Pass The Aux Component */}
+              {showPassTheAux && (
+                <div className="mb-4">
+                  <PassTheAux 
+                    roomName={roomId} 
+                    participants={participants}
+                    room={room}
+                    onClose={() => setShowPassTheAux(false)}
+                  />
+                </div>
+              )}
+
               <div className="bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl md:rounded-3xl p-3 md:p-4 shadow-2xl mx-auto w-fit">
                 <div className="flex items-center justify-center space-x-3 md:space-x-4">
                   <button
@@ -783,6 +799,23 @@ const WorkingLiveKitApp = () => {
                     } backdrop-blur-sm border border-white/10 active:scale-95 touch-manipulation select-none`}
                   >
                     {isAudioEnabled ? <Mic size={22} className="md:w-6 md:h-6" /> : <MicOff size={22} className="md:w-6 md:h-6" />}
+                  </button>
+
+                  {/* Pass The Aux button */}
+                  <button
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setShowPassTheAux(!showPassTheAux);
+                    }}
+                    className={`p-3 md:p-4 rounded-xl md:rounded-2xl transition-all duration-200 ${
+                      showPassTheAux 
+                        ? 'bg-purple-500/80 text-white active:bg-purple-500' 
+                        : 'bg-white/20 text-white active:bg-white/30'
+                    } backdrop-blur-sm border border-white/10 active:scale-95 touch-manipulation select-none`}
+                    title="Pass The Aux"
+                  >
+                    <Music size={22} className="md:w-6 md:h-6" />
                   </button>
 
                   {/* Camera flip button - mobile only */}
@@ -819,6 +852,9 @@ const WorkingLiveKitApp = () => {
       
       {/* Install App Prompt */}
       <InstallPrompt />
+      
+      {/* Feature Announcement */}
+      {isConnected && <FeatureAnnouncement />}
     </div>
   );
 };
