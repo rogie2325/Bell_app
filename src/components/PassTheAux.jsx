@@ -28,9 +28,12 @@ const PassTheAux = ({ roomName, participants, onClose, room }) => {
         }
 
         console.log('✅ PassTheAux: Room connected, setting up data listener');
+        console.log('✅ Room state:', room.state);
+        console.log('✅ Room participants:', room.participants.size);
 
         const handleDataReceived = (payload, participant) => {
             try {
+                console.log('🎵 DATA RECEIVED EVENT FIRED!');
                 const decoder = new TextDecoder();
                 const message = JSON.parse(decoder.decode(payload));
                 
@@ -100,6 +103,10 @@ const PassTheAux = ({ roomName, participants, onClose, room }) => {
                     }
                 }
 
+                if (message.type === 'PING') {
+                    console.log('🏓 PONG! Received test ping from:', message.from);
+                }
+
                 if (message.type === 'MUSIC_SHARE') {
                     console.log('DIRECT MUSIC SHARE (YouTube/Small file)');
                     const newSong = {
@@ -136,9 +143,20 @@ const PassTheAux = ({ roomName, participants, onClose, room }) => {
         };
 
         room.on('dataReceived', handleDataReceived);
+        console.log('✅ dataReceived listener attached to room');
+
+        // Test: Send a ping immediately to verify data channel works
+        setTimeout(() => {
+            const testMessage = JSON.stringify({ type: 'PING', from: 'PassTheAux' });
+            const encoder = new TextEncoder();
+            const data = encoder.encode(testMessage);
+            room.localParticipant.publishData(data, { reliable: true });
+            console.log('📡 Sent test PING message');
+        }, 1000);
 
         return () => {
             room.off('dataReceived', handleDataReceived);
+            console.log('🔌 dataReceived listener removed');
         };
     }, [room]);
 
