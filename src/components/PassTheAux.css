@@ -117,6 +117,13 @@
     text-overflow: ellipsis;
 }
 
+.dj-label {
+    font-size: 12px;
+    font-weight: 500;
+    opacity: 0.8;
+    white-space: nowrap;
+}
+
 .admin-controls {
     display: flex;
     gap: 8px;

@@ -45,6 +45,16 @@ const PassTheAux = ({ roomName, participants, onClose, room }) => {
                     console.log('🏓 PONG! Received test ping from:', message.from);
                 }
 
+                // Request sync from existing users
+                if (message.type === 'REQUEST_SYNC') {
+                    console.log('📡 Sync requested by:', participant?.identity);
+                    // If I have a current song, share it with the new user
+                    if (currentSong) {
+                        console.log('📤 Sending current song to new participant');
+                        broadcastMusicData(currentSong);
+                    }
+                }
+
                 if (message.type === 'MUSIC_SHARE') {
                     console.log('✅ MUSIC SHARE RECEIVED');
                     const newSong = {
@@ -84,13 +94,13 @@ const PassTheAux = ({ roomName, participants, onClose, room }) => {
         room.on('dataReceived', handleDataReceived);
         console.log('✅ dataReceived listener attached to room');
 
-        // Test: Send a ping immediately to verify data channel works
+        // Request sync from existing users when joining
         setTimeout(() => {
-            const testMessage = JSON.stringify({ type: 'PING', from: 'PassTheAux' });
+            const syncRequest = JSON.stringify({ type: 'REQUEST_SYNC' });
             const encoder = new TextEncoder();
-            const data = encoder.encode(testMessage);
+            const data = encoder.encode(syncRequest);
             room.localParticipant.publishData(data, { reliable: true });
-            console.log('📡 Sent test PING message');
+            console.log('📡 Requested sync from existing participants');
         }, 1000);
 
         return () => {
@@ -393,14 +403,15 @@ const PassTheAux = ({ roomName, participants, onClose, room }) => {
                         <>
                             <span className="now-playing-label">Now Playing:</span>
                             <span className="song-name-inline">{currentSong.name}</span>
+                            <span className="dj-label"> • DJ: {auxHolder || 'Unknown'}</span>
                         </>
                     ) : (
                         auxHolder ? `${auxHolder} has the aux` : 'Nobody has the aux right now...'
                     )}
                 </span>
                 
-                {/* Admin Controls - Only show if user uploaded the song */}
-                {currentSong && currentSong.addedBy === 'You' && (
+                {/* Show controls for everyone when music is playing */}
+                {currentSong && (
                     <div className="admin-controls">
                         {currentSong.type === 'audio' && (
                             <button 
@@ -467,7 +478,10 @@ const PassTheAux = ({ roomName, participants, onClose, room }) => {
                         </div>
 
                         <div className="music-options">
-                            <div className="option-card" onClick={() => fileInputRef.current?.click()}>
+                            <div className="option-card" onClick={(e) => {
+                                e.stopPropagation();
+                                fileInputRef.current?.click();
+                            }}>
                                 <span className="option-icon">📤</span>
                                 <div>
                                     <h3>Upload Audio File</h3>
@@ -477,7 +491,8 @@ const PassTheAux = ({ roomName, participants, onClose, room }) => {
                             <input
                                 ref={fileInputRef}
                                 type="file"
-                                accept="audio/*"
+                                accept="audio/*,audio/mpeg,audio/mp3,audio/wav,audio/m4a"
+                                capture="false"
                                 onChange={handleFileUpload}
                                 style={{ display: 'none' }}
                             />
