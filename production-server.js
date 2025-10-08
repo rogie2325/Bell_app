@@ -8,6 +8,7 @@ import bcrypt from 'bcrypt';
 import rateLimit from 'express-rate-limit';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { AccessToken } from 'livekit-server-sdk';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -230,6 +231,45 @@ app.post('/api/rooms', (req, res) => {
   } catch (error) {
     console.error('Room creation error:', error);
     res.status(500).json({ error: 'Failed to create room' });
+  }
+});
+
+// LiveKit Token Generation
+app.post('/api/token', async (req, res) => {
+  try {
+    const { roomName, participantName } = req.body;
+    
+    if (!roomName || !participantName) {
+      return res.status(400).json({ error: 'Missing roomName or participantName' });
+    }
+
+    const LIVEKIT_API_KEY = process.env.LIVEKIT_API_KEY;
+    const LIVEKIT_SECRET = process.env.LIVEKIT_SECRET;
+
+    if (!LIVEKIT_API_KEY || !LIVEKIT_SECRET) {
+      console.error('Missing LiveKit credentials in environment variables');
+      return res.status(500).json({ error: 'Server configuration error' });
+    }
+
+    const at = new AccessToken(LIVEKIT_API_KEY, LIVEKIT_SECRET, {
+      identity: participantName,
+      ttl: '1h',
+    });
+
+    at.addGrant({
+      room: roomName,
+      roomJoin: true,
+      canPublish: true,
+      canSubscribe: true,
+      canPublishData: true,
+    });
+
+    const token = await at.toJwt();
+    
+    res.json({ token });
+  } catch (error) {
+    console.error('Token generation error:', error);
+    res.status(500).json({ error: 'Failed to generate token' });
   }
 });
 
