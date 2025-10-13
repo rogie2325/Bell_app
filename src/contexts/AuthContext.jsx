@@ -288,6 +288,11 @@ export const AuthProvider = ({ children }) => {
           setCurrentUser(user);
           console.log('👤 User authenticated:', user.email);
           console.log('✅ User token and profile data loaded successfully');
+          console.log('📋 Profile data loaded:');
+          console.log('   photoURL:', user.photoURL);
+          console.log('   bio:', user.bio);
+          console.log('   location:', user.location);
+          console.log('   interests:', user.interests);
         } catch (error) {
           console.error('❌ Token refresh error:', error);
           // If token refresh fails, still set the user but log the error

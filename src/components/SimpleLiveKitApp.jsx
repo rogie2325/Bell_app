@@ -93,10 +93,18 @@ const WorkingLiveKitApp = () => {
     }
   };
 
-  // Update username when currentUser changes
+  // Update username when currentUser changes and log profile data
   useEffect(() => {
-    if (currentUser && !username) {
-      setUsername(currentUser.displayName || currentUser.email?.split('@')[0] || '');
+    if (currentUser) {
+      if (!username) {
+        setUsername(currentUser.displayName || currentUser.email?.split('@')[0] || '');
+      }
+      // Log current user profile data for debugging
+      console.log('👤 Current user profile data:');
+      console.log('   Display Name:', currentUser.displayName);
+      console.log('   Photo URL:', currentUser.photoURL);
+      console.log('   Bio:', currentUser.bio);
+      console.log('   Email:', currentUser.email);
     }
   }, [currentUser]);
 
@@ -135,6 +143,15 @@ const WorkingLiveKitApp = () => {
     if (!roomId || !username) {
       setError('Please enter room ID and username');
       return;
+    }
+
+    // Warn if profile data might not be loaded
+    if (!currentUser) {
+      console.warn('⚠️ Connecting without user authentication - profile data will not be available');
+    } else {
+      console.log('✅ Connecting with user profile:');
+      console.log('   Photo URL:', currentUser.photoURL || 'Not set');
+      console.log('   Bio:', currentUser.bio || 'Not set');
     }
 
     setIsConnecting(true);
