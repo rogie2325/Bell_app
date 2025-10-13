@@ -19,6 +19,11 @@ export default async function handler(req, res) {
   try {
     const { roomName, participantName, metadata } = req.body;
     
+    console.log('🎫 Token request received:');
+    console.log('   Room:', roomName);
+    console.log('   Participant:', participantName);
+    console.log('   Metadata:', metadata);
+    
     if (!roomName || !participantName) {
       return res.status(400).json({ error: 'Missing parameters' });
     }
@@ -36,6 +41,8 @@ export default async function handler(req, res) {
       ttl: '1h',
       metadata: metadata || '', // Add metadata to the token
     });
+    
+    console.log('✅ Token created with metadata:', metadata || '(empty)');
 
     at.addGrant({
       room: roomName,

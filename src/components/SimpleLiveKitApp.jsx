@@ -108,6 +108,29 @@ const WorkingLiveKitApp = () => {
     }
   }, [currentUser]);
 
+  // Update local participant metadata when currentUser or room changes
+  useEffect(() => {
+    const updateLocalMetadata = async () => {
+      if (room && currentUser && isConnected) {
+        const metadata = JSON.stringify({
+          photoURL: currentUser.photoURL || null,
+          bio: currentUser.bio || null,
+        });
+        
+        console.log('🔄 Updating local participant metadata:', metadata);
+        
+        try {
+          await room.localParticipant.setMetadata(metadata);
+          console.log('✅ Local participant metadata updated successfully');
+        } catch (error) {
+          console.error('❌ Failed to update local participant metadata:', error);
+        }
+      }
+    };
+
+    updateLocalMetadata();
+  }, [room, currentUser, isConnected]);
+
   // Close video menu when clicking outside
   useEffect(() => {
     const handleClickOutside = () => {
