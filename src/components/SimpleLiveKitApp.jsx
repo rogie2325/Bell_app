@@ -219,6 +219,7 @@ const WorkingLiveKitApp = () => {
 
       newRoom.on(RoomEvent.ParticipantConnected, (participant) => {
         console.log('👋 Participant joined:', participant.identity);
+        console.log('📋 Participant metadata on join:', participant.metadata);
         const updatedParticipants = Array.from(newRoom.remoteParticipants.values());
         setParticipants(updatedParticipants);
         console.log('👥 Updated participants:', updatedParticipants.length);
@@ -228,6 +229,14 @@ const WorkingLiveKitApp = () => {
         console.log('👋 Participant left:', participant.identity);
         const updatedParticipants = Array.from(newRoom.remoteParticipants.values());
         setParticipants(updatedParticipants);
+      });
+
+      newRoom.on(RoomEvent.ParticipantMetadataChanged, (metadata, participant) => {
+        console.log('📋 Metadata changed for:', participant.identity);
+        console.log('📋 New metadata:', metadata);
+        // Force re-render to show updated metadata
+        const updatedParticipants = Array.from(newRoom.remoteParticipants.values());
+        setParticipants([...updatedParticipants]);
       });
 
       newRoom.on(RoomEvent.TrackSubscribed, (track, publication, participant) => {
@@ -242,6 +251,20 @@ const WorkingLiveKitApp = () => {
           console.log('🔊 Auto-playing audio track from:', participant.identity);
           // Audio tracks are automatically handled by the RemoteParticipantVideo component
         }
+      });
+
+      newRoom.on(RoomEvent.TrackMuted, (publication, participant) => {
+        console.log('🎥 Track muted:', publication.kind, 'from', participant.identity);
+        // Force re-render to show camera-off view with bio
+        const updatedParticipants = Array.from(newRoom.remoteParticipants.values());
+        setParticipants([...updatedParticipants]);
+      });
+
+      newRoom.on(RoomEvent.TrackUnmuted, (publication, participant) => {
+        console.log('🎥 Track unmuted:', publication.kind, 'from', participant.identity);
+        // Force re-render to show video again
+        const updatedParticipants = Array.from(newRoom.remoteParticipants.values());
+        setParticipants([...updatedParticipants]);
       });
 
       newRoom.on(RoomEvent.Disconnected, () => {
@@ -687,6 +710,10 @@ const WorkingLiveKitApp = () => {
                 {/* Profile picture with pulsing effect */}
                 {(() => {
                   const metadata = getParticipantMetadata(participant);
+                  console.log('🖼️ Rendering camera-off view for:', participant.identity);
+                  console.log('📋 Metadata:', metadata);
+                  console.log('🖼️ Has photoURL:', !!metadata?.photoURL);
+                  console.log('📝 Has bio:', !!metadata?.bio);
                   return metadata?.photoURL ? (
                     <div className="relative">
                       <img 
@@ -712,11 +739,17 @@ const WorkingLiveKitApp = () => {
                   {/* Show bio if available */}
                   {(() => {
                     const metadata = getParticipantMetadata(participant);
-                    return metadata?.bio ? (
-                      <div className="text-sm md:text-base text-white/80 mt-2 italic max-w-xs mx-auto">
-                        "{metadata.bio}"
-                      </div>
-                    ) : null;
+                    if (metadata?.bio) {
+                      console.log('✅ Displaying bio for', participant.identity, ':', metadata.bio);
+                      return (
+                        <div className="text-sm md:text-base text-white/80 mt-2 italic max-w-xs mx-auto">
+                          "{metadata.bio}"
+                        </div>
+                      );
+                    } else {
+                      console.log('❌ No bio to display for', participant.identity);
+                      return null;
+                    }
                   })()}
                   <div className="text-xs md:text-sm text-white/60 mt-2 flex items-center justify-center gap-2">
                     <VideoOff size={16} />
