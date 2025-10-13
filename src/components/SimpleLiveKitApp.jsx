@@ -416,21 +416,26 @@ const WorkingLiveKitApp = () => {
     e?.preventDefault();
     e?.stopPropagation();
     
-    console.log('📹 Toggling video...');
+    console.log('📹 Toggling video... Current state:', isVideoEnabled);
+    console.log('📹 Local video track exists:', !!localVideoTrack);
+    
     if (localVideoTrack) {
       if (isVideoEnabled) {
         localVideoTrack.mute();
-        console.log('📹 Video muted');
+        console.log('📹 Video muted - camera turning OFF');
       } else {
         localVideoTrack.unmute();
-        console.log('📹 Video unmuted');
+        console.log('📹 Video unmuted - camera turning ON');
       }
       setIsVideoEnabled(!isVideoEnabled);
+      console.log('📹 New video state will be:', !isVideoEnabled);
       
       // Haptic feedback on mobile
       if (navigator.vibrate) {
         navigator.vibrate(50);
       }
+    } else {
+      console.error('❌ No local video track available!');
     }
   };
 
@@ -677,7 +682,7 @@ const WorkingLiveKitApp = () => {
             {/* Pulsing border animation */}
             <div className="absolute inset-0 rounded-lg border-2 border-blue-400/30 animate-pulse"></div>
             
-            <div className="text-center text-white relative z-10">
+            <div className="text-center text-white relative z-10 px-4 max-w-md">
               <div className="relative inline-block">
                 {/* Profile picture with pulsing effect */}
                 {(() => {
@@ -687,7 +692,7 @@ const WorkingLiveKitApp = () => {
                       <img 
                         src={metadata.photoURL} 
                         alt={participant.identity}
-                        className={`${isSmall ? 'w-16 h-16' : 'w-24 h-24'} rounded-full object-cover mx-auto mb-2 border-4 border-blue-400/50 shadow-lg`}
+                        className={`${isSmall ? 'w-16 h-16' : 'w-24 h-24 md:w-32 md:h-32'} rounded-full object-cover mx-auto mb-2 border-4 border-blue-400/50 shadow-lg`}
                       />
                       {/* Pulsing ring around profile pic */}
                       <div className="absolute inset-0 rounded-full border-4 border-blue-400/50 animate-ping"></div>
@@ -703,8 +708,20 @@ const WorkingLiveKitApp = () => {
               </div>
               {!isSmall && (
                 <>
-                  <div className="text-lg font-medium mt-2">{participant.identity || participant.name}</div>
-                  <div className="text-sm text-white/60">Camera Off</div>
+                  <div className="text-lg md:text-xl font-bold mt-2">{participant.identity || participant.name}</div>
+                  {/* Show bio if available */}
+                  {(() => {
+                    const metadata = getParticipantMetadata(participant);
+                    return metadata?.bio ? (
+                      <div className="text-sm md:text-base text-white/80 mt-2 italic max-w-xs mx-auto">
+                        "{metadata.bio}"
+                      </div>
+                    ) : null;
+                  })()}
+                  <div className="text-xs md:text-sm text-white/60 mt-2 flex items-center justify-center gap-2">
+                    <VideoOff size={16} />
+                    <span>Camera Off</span>
+                  </div>
                 </>
               )}
             </div>
@@ -939,7 +956,7 @@ const WorkingLiveKitApp = () => {
                 </div>
                 {!isVideoEnabled && (
                   <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
-                    <div className="text-center text-white relative">
+                    <div className="text-center text-white relative px-4 max-w-md">
                       {/* Pulsing border animation */}
                       <div className="absolute inset-0 rounded-xl border-2 border-blue-400/30 animate-pulse"></div>
                       
@@ -964,7 +981,17 @@ const WorkingLiveKitApp = () => {
                             </>
                           )}
                         </div>
-                        <div className="text-sm md:text-base font-medium mt-2">Camera Off</div>
+                        <div className="text-base md:text-lg font-bold mt-2">{username || 'You'}</div>
+                        {/* Show bio if available */}
+                        {currentUser?.bio && (
+                          <div className="text-sm md:text-base text-white/80 mt-2 italic max-w-xs mx-auto">
+                            "{currentUser.bio}"
+                          </div>
+                        )}
+                        <div className="text-xs md:text-sm text-white/60 mt-2 flex items-center justify-center gap-2">
+                          <VideoOff size={16} />
+                          <span>Camera Off</span>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -1078,22 +1105,24 @@ const WorkingLiveKitApp = () => {
                         isVideoEnabled 
                           ? 'bg-white/20 text-white active:bg-white/30' 
                           : 'bg-red-500/80 text-white active:bg-red-500'
-                      } backdrop-blur-sm border border-white/10 active:scale-95 touch-manipulation select-none relative group`}
+                      } backdrop-blur-sm border border-white/10 active:scale-95 touch-manipulation select-none relative`}
                     >
-                      {isVideoEnabled ? <Video size={22} className="md:w-6 md:h-6" /> : <VideoOff size={22} className="md:w-6 md:h-6" />}
+                      <div className="flex items-center justify-center">
+                        {isVideoEnabled ? <Video size={22} className="md:w-6 md:h-6" /> : <VideoOff size={22} className="md:w-6 md:h-6" />}
+                      </div>
                       
-                      {/* Mobile: Show more icon when long-pressed */}
+                      {/* Mobile: Menu icon in corner */}
                       {/Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) && (
-                        <button
+                        <div
                           onClick={(e) => {
                             e.preventDefault();
                             e.stopPropagation();
                             setShowVideoMenu(!showVideoMenu);
                           }}
-                          className="absolute -top-1 -right-1 bg-white/30 backdrop-blur-sm rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                          className="absolute -top-1 -right-1 bg-white/30 backdrop-blur-sm rounded-full p-1 cursor-pointer"
                         >
-                          <MoreVertical size={12} />
-                        </button>
+                          <MoreVertical size={10} />
+                        </div>
                       )}
                     </button>
                     
