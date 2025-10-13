@@ -36,6 +36,14 @@ const WorkingLiveKitApp = () => {
   const [showPassTheAux, setShowPassTheAux] = useState(false);
   const [isMusicPlaying, setIsMusicPlaying] = useState(false); // Track if music is playing
   const [showUserProfile, setShowUserProfile] = useState(false);
+  
+  // Pass the Aux invitation state
+  const [invitationSent, setInvitationSent] = useState(false);
+  const [incomingInvitation, setIncomingInvitation] = useState(null); // { from: participantIdentity, fromName: displayName }
+  const [showInvitationToast, setShowInvitationToast] = useState(false);
+  
+  // Video button dropdown menu state
+  const [showVideoMenu, setShowVideoMenu] = useState(false);
 
   // LiveKit state
   const [room, setRoom] = useState(null);
@@ -91,6 +99,20 @@ const WorkingLiveKitApp = () => {
       setUsername(currentUser.displayName || currentUser.email?.split('@')[0] || '');
     }
   }, [currentUser]);
+
+  // Close video menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = () => {
+      if (showVideoMenu) {
+        setShowVideoMenu(false);
+      }
+    };
+
+    if (showVideoMenu) {
+      document.addEventListener('click', handleClickOutside);
+      return () => document.removeEventListener('click', handleClickOutside);
+    }
+  }, [showVideoMenu]);
 
   // Initialize audio context for mobile
   const initializeAudioContext = () => {
@@ -227,6 +249,37 @@ const WorkingLiveKitApp = () => {
         setIsConnected(false);
         setRoom(null);
         setParticipants([]);
+      });
+
+      // Listen for data messages (invitations)
+      newRoom.on(RoomEvent.DataReceived, (payload, participant) => {
+        const decoder = new TextDecoder();
+        const message = decoder.decode(payload);
+        
+        try {
+          const data = JSON.parse(message);
+          console.log('📨 Data received:', data.type, 'from', participant?.identity);
+          
+          if (data.type === 'PASS_AUX_INVITE') {
+            // Received invitation from another participant
+            setIncomingInvitation({
+              from: participant.identity,
+              fromName: data.fromName || participant.identity
+            });
+            setShowInvitationToast(true);
+          } else if (data.type === 'PASS_AUX_ACCEPT') {
+            // Other participant accepted invitation
+            console.log('✅ Invitation accepted by', participant.identity);
+            setShowPassTheAux(true);
+            setInvitationSent(false);
+          } else if (data.type === 'PASS_AUX_DECLINE') {
+            // Other participant declined invitation
+            console.log('❌ Invitation declined by', participant.identity);
+            setInvitationSent(false);
+          }
+        } catch (error) {
+          console.error('❌ Error parsing data message:', error);
+        }
       });
 
       // Connect to the room
@@ -459,6 +512,79 @@ const WorkingLiveKitApp = () => {
     } catch (error) {
       console.error('❌ Camera flip failed:', error);
       setError('Failed to flip camera: ' + error.message);
+    }
+  };
+
+  // Send Pass the Aux invitation to all participants
+  const sendPassTheAuxInvitation = () => {
+    if (!room) return;
+    
+    const encoder = new TextEncoder();
+    const message = JSON.stringify({
+      type: 'PASS_AUX_INVITE',
+      fromName: username || currentUser?.displayName || 'Someone'
+    });
+    const data = encoder.encode(message);
+    
+    // Send to all participants
+    room.localParticipant.publishData(data, { reliable: true });
+    
+    setInvitationSent(true);
+    console.log('📤 Pass the Aux invitation sent');
+    
+    // Haptic feedback
+    if (navigator.vibrate) {
+      navigator.vibrate(50);
+    }
+  };
+
+  // Accept incoming Pass the Aux invitation
+  const acceptInvitation = () => {
+    if (!room || !incomingInvitation) return;
+    
+    const encoder = new TextEncoder();
+    const message = JSON.stringify({
+      type: 'PASS_AUX_ACCEPT'
+    });
+    const data = encoder.encode(message);
+    
+    // Send acceptance back
+    room.localParticipant.publishData(data, { reliable: true });
+    
+    // Open Pass the Aux for both users
+    setShowPassTheAux(true);
+    setIncomingInvitation(null);
+    setShowInvitationToast(false);
+    
+    console.log('✅ Invitation accepted');
+    
+    // Haptic feedback
+    if (navigator.vibrate) {
+      navigator.vibrate([50, 50, 50]);
+    }
+  };
+
+  // Decline incoming Pass the Aux invitation
+  const declineInvitation = () => {
+    if (!room || !incomingInvitation) return;
+    
+    const encoder = new TextEncoder();
+    const message = JSON.stringify({
+      type: 'PASS_AUX_DECLINE'
+    });
+    const data = encoder.encode(message);
+    
+    // Send decline notification
+    room.localParticipant.publishData(data, { reliable: true });
+    
+    setIncomingInvitation(null);
+    setShowInvitationToast(false);
+    
+    console.log('❌ Invitation declined');
+    
+    // Haptic feedback
+    if (navigator.vibrate) {
+      navigator.vibrate(100);
     }
   };
 
@@ -770,6 +896,14 @@ const WorkingLiveKitApp = () => {
       ) : (
         // Video call interface - Side-by-side layout like screenshot
         <div className="w-full h-screen flex flex-col relative">
+          {/* Connection Status Indicator */}
+          <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50">
+            <div className="bg-green-500/90 backdrop-blur-sm text-white px-4 py-2 rounded-full text-xs md:text-sm font-medium flex items-center gap-2 shadow-lg border border-white/20">
+              <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
+              <span>Connected{participants.length > 0 ? ` • ${participants.length + 1} in call` : ''}</span>
+            </div>
+          </div>
+          
           {/* Main video area */}
           <div className="flex-1 relative overflow-hidden pb-28 md:pb-24">
             
@@ -791,23 +925,6 @@ const WorkingLiveKitApp = () => {
                   muted
                   className="w-full h-full object-cover"
                 />
-                
-                {/* Camera Flip Button - Mobile Only, Top Right */}
-                {/Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) && (
-                  <div className="absolute top-2 right-2 z-20">
-                    <button
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        flipCamera(e);
-                      }}
-                      className="p-2 bg-black/50 backdrop-blur-sm rounded-lg text-white active:bg-black/70 transition-all duration-200 border border-white/20 active:scale-95"
-                      title={facingMode === 'user' ? 'Switch to Rear Camera' : 'Switch to Front Camera'}
-                    >
-                      <RotateCcw size={20} />
-                    </button>
-                  </div>
-                )}
                 
                 <div className="absolute bottom-2 md:bottom-4 left-2 md:left-4 bg-black/70 backdrop-blur-sm text-white px-2 md:px-3 py-1 md:py-2 rounded-full text-xs md:text-sm font-medium flex items-center space-x-2">
                   {/* Profile picture next to name */}
@@ -944,20 +1061,60 @@ const WorkingLiveKitApp = () => {
               
               <div className="bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl md:rounded-3xl p-3 md:p-4 shadow-2xl mx-auto w-fit">
                 <div className="flex items-center justify-center space-x-3 md:space-x-4">
-                  <button
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      toggleVideo(e);
-                    }}
-                    className={`p-3 md:p-4 rounded-xl md:rounded-2xl transition-all duration-200 ${
-                      isVideoEnabled 
-                        ? 'bg-white/20 text-white active:bg-white/30' 
-                        : 'bg-red-500/80 text-white active:bg-red-500'
-                    } backdrop-blur-sm border border-white/10 active:scale-95 touch-manipulation select-none`}
-                  >
-                    {isVideoEnabled ? <Video size={22} className="md:w-6 md:h-6" /> : <VideoOff size={22} className="md:w-6 md:h-6" />}
-                  </button>
+                  {/* Video button with dropdown menu */}
+                  <div className="relative">
+                    <button
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        toggleVideo(e);
+                      }}
+                      onContextMenu={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setShowVideoMenu(!showVideoMenu);
+                      }}
+                      className={`p-3 md:p-4 rounded-xl md:rounded-2xl transition-all duration-200 ${
+                        isVideoEnabled 
+                          ? 'bg-white/20 text-white active:bg-white/30' 
+                          : 'bg-red-500/80 text-white active:bg-red-500'
+                      } backdrop-blur-sm border border-white/10 active:scale-95 touch-manipulation select-none relative group`}
+                    >
+                      {isVideoEnabled ? <Video size={22} className="md:w-6 md:h-6" /> : <VideoOff size={22} className="md:w-6 md:h-6" />}
+                      
+                      {/* Mobile: Show more icon when long-pressed */}
+                      {/Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) && (
+                        <button
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setShowVideoMenu(!showVideoMenu);
+                          }}
+                          className="absolute -top-1 -right-1 bg-white/30 backdrop-blur-sm rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                          <MoreVertical size={12} />
+                        </button>
+                      )}
+                    </button>
+                    
+                    {/* Dropdown menu for video options */}
+                    {showVideoMenu && /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) && (
+                      <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 bg-black/90 backdrop-blur-xl rounded-xl border border-white/20 shadow-2xl overflow-hidden min-w-[160px] z-[100]">
+                        <button
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            flipCamera(e);
+                            setShowVideoMenu(false);
+                          }}
+                          className="w-full px-4 py-3 text-white hover:bg-white/10 active:bg-white/20 transition-colors flex items-center gap-3 text-sm"
+                        >
+                          <RotateCcw size={18} />
+                          <span>{facingMode === 'user' ? 'Rear Camera' : 'Front Camera'}</span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
                   
                   <button
                     onClick={(e) => {
@@ -976,21 +1133,43 @@ const WorkingLiveKitApp = () => {
 
                   {/* Pass The Aux button - only show when room is connected */}
                   {room && isConnected && (
-                    <button
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        setShowPassTheAux(!showPassTheAux);
-                      }}
-                      className={`p-3 md:p-4 rounded-xl md:rounded-2xl transition-all duration-200 ${
-                        showPassTheAux 
-                          ? 'bg-purple-500/80 text-white active:bg-purple-500' 
-                          : 'bg-white/20 text-white active:bg-white/30'
-                      } backdrop-blur-sm border border-white/10 active:scale-95 touch-manipulation select-none`}
-                      title="Pass The Aux"
-                    >
-                      <Music size={22} className="md:w-6 md:h-6" />
-                    </button>
+                    <div className="relative">
+                      <button
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          if (participants.length === 0) {
+                            // No participants, just open Pass the Aux
+                            setShowPassTheAux(!showPassTheAux);
+                          } else if (!showPassTheAux && !invitationSent) {
+                            // Send invitation to join Pass the Aux
+                            sendPassTheAuxInvitation();
+                          } else {
+                            // Toggle Pass the Aux
+                            setShowPassTheAux(!showPassTheAux);
+                          }
+                        }}
+                        className={`p-3 md:p-4 rounded-xl md:rounded-2xl transition-all duration-200 ${
+                          showPassTheAux 
+                            ? 'bg-purple-500/80 text-white active:bg-purple-500' 
+                            : invitationSent 
+                              ? 'bg-blue-500/80 text-white active:bg-blue-500' 
+                              : 'bg-white/20 text-white active:bg-white/30'
+                        } backdrop-blur-sm border border-white/10 active:scale-95 touch-manipulation select-none relative`}
+                        title={
+                          invitationSent 
+                            ? 'Invitation sent...' 
+                            : participants.length > 0 
+                              ? 'Invite to Pass The Aux' 
+                              : 'Pass The Aux'
+                        }
+                      >
+                        <Music size={22} className="md:w-6 md:h-6" />
+                        {invitationSent && (
+                          <span className="absolute -top-1 -right-1 w-3 h-3 bg-blue-400 rounded-full animate-pulse"></span>
+                        )}
+                      </button>
+                    </div>
                   )}
 
                   <button
@@ -1018,6 +1197,48 @@ const WorkingLiveKitApp = () => {
       
       {/* User Profile Modal */}
       {showUserProfile && <UserProfile onClose={() => setShowUserProfile(false)} />}
+      
+      {/* Pass the Aux Invitation Toast */}
+      {showInvitationToast && incomingInvitation && (
+        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[10000] animate-slide-down">
+          <div className="bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-2xl shadow-2xl p-4 md:p-6 max-w-sm mx-4 backdrop-blur-xl border border-white/20">
+            <div className="flex items-start gap-3">
+              <div className="p-2 bg-white/20 rounded-full">
+                <Music className="w-6 h-6" />
+              </div>
+              <div className="flex-1">
+                <h3 className="font-bold text-lg mb-1">Pass The Aux Invitation</h3>
+                <p className="text-white/90 text-sm mb-4">
+                  <span className="font-semibold">{incomingInvitation.fromName}</span> wants to share music with you!
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={acceptInvitation}
+                    className="flex-1 bg-white text-purple-600 font-semibold py-2 px-4 rounded-xl hover:bg-white/90 active:scale-95 transition-all"
+                  >
+                    Accept
+                  </button>
+                  <button
+                    onClick={declineInvitation}
+                    className="flex-1 bg-white/20 text-white font-semibold py-2 px-4 rounded-xl hover:bg-white/30 active:scale-95 transition-all"
+                  >
+                    Decline
+                  </button>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setShowInvitationToast(false);
+                  setIncomingInvitation(null);
+                }}
+                className="text-white/60 hover:text-white transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -157,6 +157,17 @@
   }
 }
 
+@keyframes slide-down {
+  0% {
+    transform: translate(-50%, -120%) scale(0.9);
+    opacity: 0;
+  }
+  100% {
+    transform: translate(-50%, 0) scale(1);
+    opacity: 1;
+  }
+}
+
 @keyframes shrink-width {
   0% {
     width: 100%;
@@ -181,6 +192,10 @@
 
 .animate-slide-in-top {
   animation: slide-in-top 0.4s ease-out;
+}
+
+.animate-slide-down {
+  animation: slide-down 0.4s ease-out;
 }
 
 .animate-shrink-width {

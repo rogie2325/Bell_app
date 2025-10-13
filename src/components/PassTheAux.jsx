@@ -21,6 +21,8 @@ const PassTheAux = ({ roomName, participants, onClose, room, onMusicStateChange 
     const [showBanner, setShowBanner] = useState(true);
     const [reactions, setReactions] = useState([]); // For emoji reactions
     const [userReaction, setUserReaction] = useState(null); // Current user's reaction
+    const [reactionCounts, setReactionCounts] = useState({}); // Track reactions per user: { username: count }
+    const [showReactionNotification, setShowReactionNotification] = useState(null); // Show who reacted
     
     const audioRef = useRef(null);
     const fileInputRef = useRef(null);
@@ -185,12 +187,33 @@ const PassTheAux = ({ roomName, participants, onClose, room, onMusicStateChange 
                 if (message.type === 'SONG_REACTION') {
                     console.log('REACTION RECEIVED:', message.emoji, 'from', message.from);
                     const reactionId = Date.now() + Math.random();
+                    
+                    // Add to reactions list with animation
                     setReactions(prev => [...prev, { 
                         id: reactionId, 
                         emoji: message.emoji, 
                         x: Math.random() * 80 + 10,
                         from: message.from
                     }]);
+                    
+                    // Update reaction count for the DJ (auxHolder)
+                    if (auxHolder && auxHolder !== 'You') {
+                        setReactionCounts(prev => ({
+                            ...prev,
+                            [auxHolder]: (prev[auxHolder] || 0) + 1
+                        }));
+                    }
+                    
+                    // Show notification of who reacted
+                    setShowReactionNotification({
+                        from: message.from,
+                        emoji: message.emoji
+                    });
+                    
+                    // Hide notification after 2 seconds
+                    setTimeout(() => {
+                        setShowReactionNotification(null);
+                    }, 2000);
                     
                     // Remove reaction after animation
                     setTimeout(() => {
@@ -711,6 +734,14 @@ const PassTheAux = ({ roomName, participants, onClose, room, onMusicStateChange 
         handleCloseModal();
     };
 
+    // Get DJ status based on reaction count
+    const getDJStatus = (count) => {
+        if (count >= 50) return { level: 'DJ Legend', icon: '🏆', color: '#FFD700' };
+        if (count >= 20) return { level: 'Pro Level DJ', icon: '⭐', color: '#C0C0C0' };
+        if (count >= 5) return { level: 'Certified DJ', icon: '🎵', color: '#CD7F32' };
+        return null;
+    };
+
     // Reaction system
     const sendReaction = (emoji) => {
         if (!room) return;
@@ -731,7 +762,20 @@ const PassTheAux = ({ roomName, participants, onClose, room, onMusicStateChange 
 
         // Add to reactions list with animation
         const reactionId = Date.now();
-        setReactions(prev => [...prev, { id: reactionId, emoji, x: Math.random() * 80 + 10 }]);
+        setReactions(prev => [...prev, { 
+            id: reactionId, 
+            emoji, 
+            x: Math.random() * 80 + 10,
+            from: room.localParticipant.identity 
+        }]);
+
+        // Update reaction count for current DJ (auxHolder) if it's me
+        if (auxHolder === 'You') {
+            setReactionCounts(prev => ({
+                ...prev,
+                'You': (prev['You'] || 0) + 1
+            }));
+        }
 
         // Remove reaction after animation
         setTimeout(() => {
@@ -781,6 +825,14 @@ const PassTheAux = ({ roomName, participants, onClose, room, onMusicStateChange 
                         <X size={20} />
                     </button>
 
+                    {/* Reaction Notification - Who reacted */}
+                    {showReactionNotification && (
+                        <div className="reaction-notification">
+                            <span className="reaction-emoji">{showReactionNotification.emoji}</span>
+                            <span className="reaction-from">{showReactionNotification.from} reacted!</span>
+                        </div>
+                    )}
+
                     {/* Floating Reactions */}
                     <div className="reactions-container">
                         {reactions.map(reaction => (
@@ -788,6 +840,7 @@ const PassTheAux = ({ roomName, participants, onClose, room, onMusicStateChange 
                                 key={reaction.id} 
                                 className="floating-reaction"
                                 style={{ left: `${reaction.x}%` }}
+                                title={`From ${reaction.from || 'Unknown'}`}
                             >
                                 {reaction.emoji}
                             </div>
@@ -804,6 +857,26 @@ const PassTheAux = ({ roomName, participants, onClose, room, onMusicStateChange 
                         </div>
                         <div className="dj-label-badge">
                             <span className="dj-text">DJ {auxHolder || 'Unknown'}</span>
+                            {/* DJ Status Badge */}
+                            {(() => {
+                                const currentDJ = auxHolder || 'Unknown';
+                                const reactionCount = reactionCounts[currentDJ] || 0;
+                                const status = getDJStatus(reactionCount);
+                                
+                                return status && (
+                                    <div 
+                                        className="dj-status-badge"
+                                        style={{ 
+                                            background: `linear-gradient(135deg, ${status.color}20, ${status.color}40)`,
+                                            borderColor: status.color 
+                                        }}
+                                    >
+                                        <span className="status-icon">{status.icon}</span>
+                                        <span className="status-text">{status.level}</span>
+                                        <span className="status-count">{reactionCount} 🎵</span>
+                                    </div>
+                                );
+                            })()}
                         </div>
                     </div>
 
