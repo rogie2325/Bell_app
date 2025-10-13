@@ -24,9 +24,11 @@
   background: white;
   border-radius: 1rem;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-  max-width: 28rem;
+  max-width: 32rem;
   width: 100%;
   padding: 2rem;
+  max-height: 90vh;
+  overflow-y: auto;
   position: relative;
   animation: slideUp 0.3s ease-out;
 }
@@ -468,5 +470,171 @@
 
   .profile-btn-secondary:hover:not(:disabled) {
     background: #4b5563;
+  }
+}
+
+/* Character count for bio */
+.bio-char-count {
+  font-size: 0.75rem;
+  color: #6b7280;
+  text-align: right;
+  margin-top: 0.25rem;
+  display: block;
+}
+
+/* Enhanced profile field spacing */
+.profile-field {
+  margin-bottom: 1.5rem;
+}
+
+.profile-field:last-child {
+  margin-bottom: 0;
+}
+
+/* Enhanced textarea styling */
+.profile-field textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
+/* Profile field icons */
+.profile-field label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 500;
+  color: #374151;
+  margin-bottom: 0.5rem;
+}
+
+/* Theme selector */
+.theme-selector {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+}
+
+.theme-option {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  border: 2px solid #e5e7eb;
+  border-radius: 0.5rem;
+  background: white;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 0.875rem;
+}
+
+.theme-option:hover {
+  border-color: var(--theme-color);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.theme-option.selected {
+  border-color: var(--theme-color);
+  background: rgba(59, 130, 246, 0.1);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+}
+
+.theme-preview {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.theme-option span {
+  font-weight: 500;
+  color: #374151;
+}
+
+.theme-option.selected span {
+  color: var(--theme-color);
+  font-weight: 600;
+}
+
+/* Photo upload buttons */
+.photo-upload-buttons {
+  display: flex;
+  gap: 0.5rem;
+  position: absolute;
+  bottom: -10px;
+  right: -10px;
+}
+
+.quick-upload-btn {
+  background: #10b981;
+  border: 2px solid white;
+  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.quick-upload-btn:hover:not(:disabled) {
+  background: #059669;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.quick-upload-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.quick-upload-btn svg {
+  color: white;
+}
+
+/* Dark mode for new elements */
+@media (prefers-color-scheme: dark) {
+  .bio-char-count {
+    color: #9ca3af;
+  }
+  
+  .profile-field label {
+    color: #d1d5db;
+  }
+  
+  .profile-field textarea {
+    background: #374151;
+    border-color: #4b5563;
+    color: #f9fafb;
+  }
+
+  .theme-option {
+    background: #374151;
+    border-color: #4b5563;
+  }
+
+  .theme-option span {
+    color: #d1d5db;
+  }
+
+  .theme-option:hover {
+    background: #4b5563;
+  }
+
+  .theme-option.selected {
+    background: rgba(59, 130, 246, 0.2);
+    border-color: var(--theme-color);
+  }
+
+  .quick-upload-btn {
+    background: #059669;
+  }
+
+  .quick-upload-btn:hover:not(:disabled) {
+    background: #047857;
   }
 }
