@@ -50,6 +50,7 @@ export default async function handler(req, res) {
       canPublish: true,
       canSubscribe: true,
       canPublishData: true,
+      canUpdateOwnMetadata: true, // Allow participants to update their own metadata
     });
 
     const token = await at.toJwt();
