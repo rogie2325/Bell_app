@@ -90,7 +90,7 @@ const PassTheAuxEnhanced = ({ roomName, participants, onClose, room, onMusicStat
     const userToken = getStoredAccessToken();
     if (!userToken) return;
     
-    window.onSpotifyWebPlaybackSDKReady = () => {
+    const initializePlayer = () => {
       const player = new window.Spotify.Player({
         name: 'Bell - Pass The Aux',
         getOAuthToken: cb => { cb(userToken); },
@@ -133,6 +133,15 @@ const PassTheAuxEnhanced = ({ roomName, participants, onClose, room, onMusicStat
       
       setSpotifyPlayer(player);
     };
+    
+    // Check if SDK is already loaded
+    if (window.Spotify) {
+      console.log('🎵 Spotify SDK already loaded, initializing player...');
+      initializePlayer();
+    } else {
+      console.log('⏳ Waiting for Spotify SDK to load...');
+      window.onSpotifyWebPlaybackSDKReady = initializePlayer;
+    }
     
     // Cleanup
     return () => {
@@ -831,6 +840,10 @@ const PassTheAuxEnhanced = ({ roomName, participants, onClose, room, onMusicStat
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
+                      // Save current room info before redirecting
+                      if (roomName) {
+                        sessionStorage.setItem('spotify_return_room', roomName);
+                      }
                       redirectToSpotifyAuth();
                     }}
                     className="text-xs opacity-75 hover:opacity-100 transition-opacity flex items-center gap-1"

@@ -18,8 +18,17 @@ const SpotifyCallback = () => {
             storeTokens(data.access_token, data.refresh_token, data.expires_in);
             console.log('✅ Spotify authentication successful!');
             
-            // Redirect back to main app
-            navigate('/');
+            // Check if user was in a room before authenticating
+            const returnRoom = sessionStorage.getItem('spotify_return_room');
+            if (returnRoom) {
+              sessionStorage.removeItem('spotify_return_room');
+              console.log('🔄 Returning to room:', returnRoom);
+              // Redirect back to the room they were in
+              navigate('/', { state: { autoJoinRoom: returnRoom } });
+            } else {
+              // Redirect to home
+              navigate('/');
+            }
           } else {
             console.error('❌ Failed to get access token');
             navigate('/');

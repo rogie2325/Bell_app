@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useLocation } from 'react-router-dom';
 import { 
   Camera, Mic, MicOff, Video, VideoOff, Phone, Users, MessageCircle, 
   Settings, Send, X, PhoneOff, User, RotateCcw, Music, MoreVertical, Youtube
@@ -23,6 +24,7 @@ import WatchParty from './WatchParty';
 
 const WorkingLiveKitApp = () => {
   const { currentUser } = useAuth();
+  const location = useLocation();
   
   // State
   const [isConnected, setIsConnected] = useState(false);
@@ -113,6 +115,19 @@ const WorkingLiveKitApp = () => {
       console.log('   Email:', currentUser.email);
     }
   }, [currentUser]);
+
+  // Auto-join room after Spotify authentication
+  useEffect(() => {
+    if (location.state?.autoJoinRoom && !isConnected) {
+      const autoJoinRoomId = location.state.autoJoinRoom;
+      console.log('🎵 Auto-joining room after Spotify auth:', autoJoinRoomId);
+      setRoomId(autoJoinRoomId);
+      // Small delay to ensure UI is ready
+      setTimeout(() => {
+        connectToRoom();
+      }, 500);
+    }
+  }, [location.state]);
 
   // Update local participant metadata when currentUser or room changes
   useEffect(() => {
