@@ -1,64 +1,59 @@
-const RAPIDAPI_KEY = import.meta.env.VITE_RAPIDAPI_KEY;
-const RAPIDAPI_HOST = 'netflix-movies-and-tv-shows-api-by-apirobots.p.rapidapi.com';
+const YOUTUBE_API_KEY = import.meta.env.VITE_YOUTUBE_API_KEY || 'AIzaSyD8JhdVLxGw4b1kp-lDHrTHxNxb1U7KYqk';
 
-export const searchNetflix = async (query, page = 1) => {
-  if (!RAPIDAPI_KEY) {
-    console.error('⚠️ Netflix API not configured. Add VITE_RAPIDAPI_KEY to .env');
-    throw new Error('Netflix API not configured');
-  }
-
-  if (!query || query.trim() === '') {
-    return [];
-  }
-
+export async function searchNetflix(query) {
   try {
-    console.log(`🔍 Searching Netflix for: "${query}" (page ${page})`);
+    // Just use YouTube API to search for movie/show trailers
+    const searchQuery = `${query} official trailer`;
+    console.log('🔍 Searching YouTube for movie trailers:', searchQuery);
     
-    const response = await fetch(
-      `https://${RAPIDAPI_HOST}/v1/netflix?name=${encodeURIComponent(query)}&page=${page}`,
-      {
-        method: 'GET',
-        headers: {
-          'x-rapidapi-key': RAPIDAPI_KEY,
-          'x-rapidapi-host': RAPIDAPI_HOST
-        }
-      }
-    );
+    const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(searchQuery)}&type=video&maxResults=20&key=${YOUTUBE_API_KEY}`;
+    
+    const response = await fetch(url);
 
     if (!response.ok) {
-      throw new Error(`Netflix API error: ${response.status} ${response.statusText}`);
+      throw new Error(`YouTube API error: ${response.status}`);
     }
 
     const data = await response.json();
-    console.log(`✅ Netflix API response:`, data);
     
-    // Map Netflix results to our format
-    const results = data.results?.map(item => ({
-      id: item.id || `netflix-${Date.now()}-${Math.random()}`,
-      title: item.title || item.name || 'Unknown Title',
-      type: item.type || 'movie', // 'movie' or 'series'
-      year: item.year || item.release_year || 'N/A',
-      rating: item.rating || item.imdb_rating || 'N/A',
-      description: item.description || item.synopsis || 'No description available',
-      image: item.image_url || item.poster || item.thumbnail || 'https://via.placeholder.com/300x450?text=No+Image',
-      genres: item.genres || [],
-      cast: item.cast || [],
-      director: item.director || 'Unknown',
-      runtime: item.runtime || item.duration || 0,
-      seasons: item.seasons || item.number_of_seasons,
-      trailerUrl: item.trailer_url || item.trailer,
-      netflixUrl: item.netflix_url || item.url,
-      platform: 'netflix'
-    })) || [];
+    if (!data.items || data.items.length === 0) {
+      console.warn('No results found');
+      return [];
+    }
     
-    console.log(`📺 Found ${results.length} Netflix titles`);
+    // Map YouTube results to look like movie results
+    const results = data.items.map(item => {
+      const snippet = item.snippet;
+      const videoId = item.id.videoId;
+      
+      // Extract year from title if possible
+      const yearMatch = snippet.title.match(/\((\d{4})\)/) || snippet.title.match(/(\d{4})/);
+      const year = yearMatch ? yearMatch[1] : new Date().getFullYear();
+      
+      return {
+        id: videoId,
+        title: snippet.title.replace(/official trailer/gi, '').replace(/\(\d{4}\)/g, '').trim(),
+        description: snippet.description || 'Watch the trailer together!',
+        image: snippet.thumbnails.high?.url || snippet.thumbnails.medium?.url || snippet.thumbnails.default?.url,
+        year: year,
+        rating: null,
+        genres: ['Trailer'],
+        type: 'movie',
+        imdbId: null,
+        platforms: ['YouTube'],
+        streamingInfo: {},
+        trailerUrl: `https://www.youtube.com/watch?v=${videoId}`,
+        channelTitle: snippet.channelTitle
+      };
+    });
+    
+    console.log('✅ Found', results.length, 'movie trailers');
     return results;
-    
   } catch (error) {
-    console.error('❌ Netflix search failed:', error);
-    throw error;
+    console.error('❌ Error searching for trailers:', error);
+    return [];
   }
-};
+}
 
 export const getNetflixTitles = async () => {
   if (!RAPIDAPI_KEY) {
