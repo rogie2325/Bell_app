@@ -496,6 +496,56 @@ const PassTheAuxEnhanced = ({ roomName, participants, onClose, room, onMusicStat
     
     room.localParticipant.publishData(data, { reliable: true });
   };
+
+  // Handle closing Pass The Aux
+  const handleClose = () => {
+    // Pause music
+    setIsPlaying(false);
+    
+    // Stop Spotify playback if using Web Playback SDK
+    if (spotifyPlayer) {
+      spotifyPlayer.pause();
+    }
+    
+    // Pause audio element
+    if (audioRef.current) {
+      audioRef.current.pause();
+    }
+    
+    // Notify parent that music stopped
+    if (onMusicStateChange) {
+      onMusicStateChange(false);
+    }
+    
+    onClose();
+  };
+
+  // End session for everyone
+  const handleEndSession = () => {
+    if (confirm('End Pass The Aux session for everyone?')) {
+      // Stop music
+      setIsPlaying(false);
+      if (spotifyPlayer) spotifyPlayer.pause();
+      if (audioRef.current) audioRef.current.pause();
+      
+      // Clear everything
+      setQueue([]);
+      setCurrentSong(null);
+      setPlayHistory([]);
+      
+      // Broadcast end session
+      broadcastMessage({
+        type: 'END_SESSION'
+      });
+      
+      // Notify parent
+      if (onMusicStateChange) {
+        onMusicStateChange(false);
+      }
+      
+      onClose();
+    }
+  };
   
   // Listen for messages from other participants
   useEffect(() => {
@@ -522,6 +572,20 @@ const PassTheAuxEnhanced = ({ roomName, participants, onClose, room, onMusicStat
         case 'PLAY_SONG':
           setCurrentSong(message.song);
           setIsPlaying(true);
+          
+          // Play the song for this user too
+          if (message.song.platform === 'spotify' && spotifyAuthenticated && isSpotifyReady && deviceId) {
+            // Play via Spotify Web Playback SDK
+            const userToken = getStoredAccessToken();
+            fetch(`https://api.spotify.com/v1/me/player/play?device_id=${deviceId}`, {
+              method: 'PUT',
+              body: JSON.stringify({ uris: [message.song.uri] }),
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${userToken}`
+              },
+            }).catch(err => console.error('Failed to sync Spotify playback:', err));
+          }
           break;
           
         case 'VOTE_SONG':
@@ -541,6 +605,17 @@ const PassTheAuxEnhanced = ({ roomName, participants, onClose, room, onMusicStat
           
         case 'DJ_ROTATE':
           setCurrentDJ(message.dj);
+          break;
+          
+        case 'END_SESSION':
+          // Clear everything when session ends
+          setQueue([]);
+          setCurrentSong(null);
+          setIsPlaying(false);
+          setPlayHistory([]);
+          if (spotifyPlayer) spotifyPlayer.pause();
+          if (audioRef.current) audioRef.current.pause();
+          if (onMusicStateChange) onMusicStateChange(false);
           break;
       }
     };
@@ -642,7 +717,13 @@ const PassTheAuxEnhanced = ({ roomName, participants, onClose, room, onMusicStat
         </div>
         <div className="flex items-center gap-2">
           <button
-            onClick={onClose}
+            onClick={handleEndSession}
+            className="text-white/80 hover:text-white transition-colors px-3 py-1.5 hover:bg-red-500/20 rounded-lg text-sm font-medium border border-red-500/30"
+          >
+            End Session
+          </button>
+          <button
+            onClick={handleClose}
             className="text-white/80 hover:text-white transition-colors p-2 hover:bg-white/10 rounded-lg"
           >
             <X size={20} />
@@ -652,105 +733,140 @@ const PassTheAuxEnhanced = ({ roomName, participants, onClose, room, onMusicStat
       
       {/* Now Playing */}
       {currentSong && (
-        <div className="bg-gradient-to-r from-purple-800/50 to-pink-800/50 p-6">
-          <div className="flex items-center gap-4">
-            <img
-              src={currentSong.albumArt}
-              alt={currentSong.album}
-              className="w-20 h-20 rounded-lg shadow-lg"
-            />
-            <div className="flex-1">
-              <h3 className="text-white font-bold text-xl">{currentSong.name}</h3>
-              <p className="text-white/80">{currentSong.artist}</p>
-              <p className="text-white/60 text-sm">{currentSong.album}</p>
-            </div>
-            
-            {/* Reactions */}
-            <div className="flex gap-2">
-              {['❤️', '🔥', '👍', '😍'].map(emoji => (
-                <button
-                  key={emoji}
-                  onClick={() => reactToSong(emoji)}
-                  className="text-2xl hover:scale-125 transition-transform"
-                >
-                  {emoji}
-                </button>
-              ))}
-            </div>
-          </div>
+        <div className="bg-gradient-to-br from-purple-900/60 to-pink-900/60 backdrop-blur-xl p-8 border-b border-white/10 relative overflow-hidden">
+          {/* Animated background */}
+          <div className="absolute inset-0 bg-gradient-to-r from-purple-500/20 to-pink-500/20 animate-pulse"></div>
           
-          {/* Active Reactions */}
-          {Object.keys(reactions).length > 0 && (
-            <div className="mt-3 flex flex-wrap gap-2">
-              {Object.entries(reactions).map(([user, emoji]) => (
-                <div
-                  key={user}
-                  className="bg-white/10 rounded-full px-3 py-1 text-sm text-white flex items-center gap-1 animate-bounce"
-                >
-                  <span>{emoji}</span>
-                  <span>{user}</span>
+          <div className="relative z-10">
+            <div className="flex items-start gap-6">
+              {/* Album Art with Animation */}
+              <div className="relative group">
+                <img
+                  src={currentSong.albumArt}
+                  alt={currentSong.album}
+                  className={`w-32 h-32 rounded-2xl shadow-2xl shadow-purple-500/50 ${isPlaying ? 'animate-pulse' : ''}`}
+                />
+                {isPlaying && (
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <div className="w-16 h-16 border-4 border-white/30 border-t-white rounded-full animate-spin"></div>
+                  </div>
+                )}
+                <div className="absolute -bottom-2 -right-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white px-3 py-1 rounded-full text-xs font-bold shadow-lg">
+                  {currentSong.platform === 'spotify' ? '🎵 Spotify' : '▶️ YouTube'}
                 </div>
-              ))}
-            </div>
-          )}
-          
-          {/* Progress Bar */}
-          <div className="mt-4 space-y-2">
-            <div className="w-full h-2 bg-white/20 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-gradient-to-r from-purple-400 to-pink-400 transition-all"
-                style={{ width: `${(currentTime / duration) * 100}%` }}
-              />
-            </div>
-            <div className="flex justify-between text-white/60 text-xs">
-              <span>{formatTime(currentTime)}</span>
-              <span>{formatTime(duration)}</span>
+              </div>
+              
+              {/* Song Info */}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex-1 min-w-0">
+                    <h3 className="text-white font-bold text-3xl mb-2 truncate">{currentSong.name}</h3>
+                    <p className="text-white/90 text-lg mb-1 truncate">{currentSong.artist}</p>
+                    <p className="text-white/60 text-sm truncate">{currentSong.album}</p>
+                    <div className="flex items-center gap-2 mt-3">
+                      <span className="bg-white/20 backdrop-blur-md px-3 py-1 rounded-full text-xs text-white/90 border border-white/30">
+                        Added by {currentSong.addedBy}
+                      </span>
+                      {spotifyAuthenticated && isSpotifyReady && currentSong.platform === 'spotify' && (
+                        <span className="bg-green-500/80 backdrop-blur-md px-3 py-1 rounded-full text-xs text-white font-semibold border border-green-400/50 flex items-center gap-1">
+                          <span className="w-2 h-2 bg-white rounded-full animate-pulse"></span>
+                          Full Track
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  
+                  {/* Reactions */}
+                  <div className="flex gap-2 flex-shrink-0">
+                    {['❤️', '🔥', '👍', '😍'].map(emoji => (
+                      <button
+                        key={emoji}
+                        onClick={() => reactToSong(emoji)}
+                        className="text-3xl hover:scale-125 active:scale-95 transition-transform hover:drop-shadow-2xl"
+                      >
+                        {emoji}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                
+                {/* Active Reactions */}
+                {Object.keys(reactions).length > 0 && (
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {Object.entries(reactions).map(([user, emoji]) => (
+                      <div
+                        key={user}
+                        className="bg-gradient-to-r from-white/20 to-white/10 backdrop-blur-md rounded-full px-4 py-2 text-sm text-white flex items-center gap-2 animate-bounce border border-white/30 shadow-lg"
+                      >
+                        <span className="text-xl">{emoji}</span>
+                        <span className="font-medium">{user}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                
+                {/* Progress Bar */}
+                <div className="mt-6 space-y-3">
+                  <div className="relative">
+                    <div className="w-full h-3 bg-white/10 rounded-full overflow-hidden backdrop-blur-sm border border-white/20">
+                      <div
+                        className="h-full bg-gradient-to-r from-purple-400 via-pink-400 to-purple-400 transition-all duration-300 shadow-lg shadow-purple-500/50"
+                        style={{ width: `${(currentTime / duration) * 100 || 0}%` }}
+                      />
+                    </div>
+                  </div>
+                  <div className="flex justify-between text-white/70 text-sm font-medium">
+                    <span>{formatTime(currentTime)}</span>
+                    <span>{formatTime(duration)}</span>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
           
           {/* Controls */}
-          <div className="mt-4 flex items-center justify-between">
-            <div className="flex items-center gap-3">
+          <div className="mt-6 flex items-center justify-between relative z-10">
+            <div className="flex items-center gap-4">
               <button
                 onClick={() => {/* Previous */}}
-                className="text-white/60 hover:text-white transition-colors"
+                className="text-white/70 hover:text-white transition-all hover:scale-110 p-2 hover:bg-white/10 rounded-full"
               >
-                <SkipBack size={24} />
+                <SkipBack size={28} />
               </button>
               <button
                 onClick={() => setIsPlaying(!isPlaying)}
-                className="bg-white text-purple-600 p-3 rounded-full hover:scale-110 transition-transform"
+                className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white p-4 rounded-full hover:scale-110 active:scale-95 transition-all shadow-lg shadow-purple-500/50"
               >
-                {isPlaying ? <Pause size={24} /> : <Play size={24} />}
+                {isPlaying ? <Pause size={32} /> : <Play size={32} className="ml-1" />}
               </button>
               <button
                 onClick={skipSong}
-                className="text-white/60 hover:text-white transition-colors"
+                className="text-white/70 hover:text-white transition-all hover:scale-110 p-2 hover:bg-white/10 rounded-full"
               >
-                <SkipForward size={24} />
+                <SkipForward size={28} />
               </button>
             </div>
             
             {/* Volume */}
-            <div className="flex items-center gap-2">
-              <VolumeX size={20} className="text-white/60" />
+            <div className="flex items-center gap-3 bg-white/10 backdrop-blur-md px-4 py-2 rounded-full border border-white/20">
+              <VolumeX size={18} className="text-white/70" />
               <input
                 type="range"
                 min="0"
                 max="100"
                 value={volume}
                 onChange={(e) => setVolume(e.target.value)}
-                className="w-24 h-1 bg-white/20 rounded-full accent-pink-400"
+                className="w-28 h-2 bg-white/20 rounded-full accent-pink-400 cursor-pointer"
               />
-              <Volume2 size={20} className="text-white/60" />
+              <Volume2 size={18} className="text-white/70" />
             </div>
             
             {/* Skip Vote */}
             <button
               onClick={voteSkip}
-              className="bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2"
+              className="bg-gradient-to-r from-white/20 to-white/10 backdrop-blur-md hover:from-white/30 hover:to-white/20 text-white px-5 py-2.5 rounded-full text-sm font-semibold transition-all flex items-center gap-2 border border-white/30 shadow-lg hover:scale-105 active:scale-95"
             >
-              <ThumbsUp size={16} />
+              <ThumbsUp size={18} />
               Skip ({Object.keys(skipVotes).length}/{participants.length + 1})
             </button>
           </div>
