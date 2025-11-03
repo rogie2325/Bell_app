@@ -568,13 +568,19 @@ const PassTheAuxEnhanced = ({ roomName, participants, onClose, room, onMusicStat
   // Update audio element
   useEffect(() => {
     if (audioRef.current && currentSong) {
+      // Skip audio element setup if using Spotify Web Playback SDK
+      if (currentSong.platform === 'spotify' && spotifyAuthenticated && isSpotifyReady && deviceId) {
+        console.log('🎵 Using Spotify Web Playback SDK, skipping audio element');
+        return;
+      }
+      
       const audioUrl = currentSong.previewUrl;
       
-      // Check if preview URL is available
+      // Check if preview URL is available (only for non-Premium playback)
       if (!audioUrl || audioUrl === 'null' || audioUrl === null) {
         console.warn('⚠️ No preview available for:', currentSong.name);
-        alert(`Preview not available for "${currentSong.name}"\n\nSpotify only provides 30-second previews for some songs.\n\nSkipping to next...`);
-        setTimeout(() => playNext(), 2000);
+        console.log('⏭️ Skipping to next song...');
+        setTimeout(() => playNext(), 1000);
         return;
       }
       
@@ -583,8 +589,8 @@ const PassTheAuxEnhanced = ({ roomName, participants, onClose, room, onMusicStat
       if (isPlaying) {
         audioRef.current.play().catch(error => {
           console.error('Playback failed:', error);
-          alert(`Couldn't play "${currentSong.name}"\n\nTrying next song...`);
-          setTimeout(() => playNext(), 2000);
+          console.log('⏭️ Trying next song...');
+          setTimeout(() => playNext(), 1000);
         });
       }
     }
