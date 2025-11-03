@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   Camera, Mic, MicOff, Video, VideoOff, Phone, Users, MessageCircle, 
-  Settings, Send, X, PhoneOff, User, RotateCcw, Music, MoreVertical
+  Settings, Send, X, PhoneOff, User, RotateCcw, Music, MoreVertical, Youtube
 } from 'lucide-react';
 import {
   Room,
@@ -16,8 +16,10 @@ import { DotLottieReact } from '@lottiefiles/dotlottie-react';
 import { useAuth } from '../contexts/AuthContext';
 import InstallPrompt from './InstallPrompt';
 import PassTheAux from './PassTheAux';
+import PassTheAuxEnhanced from './PassTheAuxEnhanced';
 import FeatureAnnouncement from './FeatureAnnouncement';
 import UserProfile from './UserProfile';
+import WatchParty from './WatchParty';
 
 const WorkingLiveKitApp = () => {
   const { currentUser } = useAuth();
@@ -36,6 +38,10 @@ const WorkingLiveKitApp = () => {
   const [showPassTheAux, setShowPassTheAux] = useState(false);
   const [isMusicPlaying, setIsMusicPlaying] = useState(false); // Track if music is playing
   const [showUserProfile, setShowUserProfile] = useState(false);
+  const [showWatchParty, setShowWatchParty] = useState(false);
+  const [isWatchingVideo, setIsWatchingVideo] = useState(false);
+  const [watchPartyInvite, setWatchPartyInvite] = useState(null); // Watch Party invitation
+  const [showWatchPartyInvite, setShowWatchPartyInvite] = useState(false);
   
   // Pass the Aux invitation state
   const [invitationSent, setInvitationSent] = useState(false);
@@ -339,6 +345,17 @@ const WorkingLiveKitApp = () => {
             // Other participant declined invitation
             console.log('❌ Invitation declined by', participant.identity);
             setInvitationSent(false);
+          } else if (data.type === 'WATCH_PARTY_INVITE') {
+            // Received Watch Party invitation
+            console.log('🎬 Watch Party invitation from', participant.identity);
+            setWatchPartyInvite({
+              from: participant.identity,
+              fromName: data.hostName || participant.identity,
+              videoUrl: data.videoUrl
+            });
+            setShowWatchPartyInvite(true);
+            // Auto-open watch party modal to show invite
+            setShowWatchParty(true);
           }
         } catch (error) {
           console.error('❌ Error parsing data message:', error);
@@ -997,8 +1014,8 @@ const WorkingLiveKitApp = () => {
           {/* Main video area */}
           <div className="flex-1 relative overflow-hidden pb-28 md:pb-24">
             
-            {/* Hide videos completely when music is playing */}
-            {!isMusicPlaying && (
+            {/* Hide videos completely when music is playing or watching video */}
+            {!isMusicPlaying && !isWatchingVideo && (
               /* Normal Video Layout */
               <div className={`h-full p-2 md:p-4 flex flex-col md:flex-row md:items-center md:justify-center gap-2 md:gap-4 transition-all duration-500 ${
                 showPassTheAux ? 'mt-20 md:mt-24' : ''
@@ -1144,7 +1161,7 @@ const WorkingLiveKitApp = () => {
           {showPassTheAux && (
             <div className="fixed top-0 left-0 right-0 pt-safe pt-4 pointer-events-none z-[1001]">
               <div className="max-w-4xl mx-auto px-4 pointer-events-auto">
-                <PassTheAux 
+                <PassTheAuxEnhanced 
                   roomName={roomId} 
                   participants={participants}
                   room={room}
@@ -1152,6 +1169,18 @@ const WorkingLiveKitApp = () => {
                   onMusicStateChange={setIsMusicPlaying}
                 />
               </div>
+            </div>
+          )}
+
+          {/* Watch Party Component - Center of screen */}
+          {showWatchParty && (
+            <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[1002] flex items-center justify-center p-4">
+              <WatchParty 
+                room={room}
+                participants={participants}
+                onClose={() => setShowWatchParty(false)}
+                onVideoStateChange={setIsWatchingVideo}
+              />
             </div>
           )}
 
@@ -1272,6 +1301,25 @@ const WorkingLiveKitApp = () => {
                         )}
                       </button>
                     </div>
+                  )}
+
+                  {/* Watch Party button - only show when room is connected */}
+                  {room && isConnected && (
+                    <button
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setShowWatchParty(!showWatchParty);
+                      }}
+                      className={`p-3 md:p-4 rounded-xl md:rounded-2xl transition-all duration-200 ${
+                        showWatchParty 
+                          ? 'bg-red-500/80 text-white active:bg-red-500' 
+                          : 'bg-white/20 text-white active:bg-white/30'
+                      } backdrop-blur-sm border border-white/10 active:scale-95 touch-manipulation select-none`}
+                      title="Watch Party"
+                    >
+                      <Youtube size={22} className="md:w-6 md:h-6" />
+                    </button>
                   )}
 
                   <button

@@ -1,4 +1,5 @@
 // production-server.js - Production-ready WebSocket server for Bell App
+import 'dotenv/config';
 import express from 'express';
 import { createServer } from 'http';
 import { Server as SocketIOServer } from 'socket.io';

@@ -1,7 +1,9 @@
 import React from 'react';
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import SimpleLiveKitApp from './components/SimpleLiveKitApp';
 import Auth from './components/Auth';
+import SpotifyCallback from './components/SpotifyCallback';
 
 const AppContent = () => {
     const { currentUser, loading } = useAuth();
@@ -33,7 +35,12 @@ const AppContent = () => {
 const App = () => {
     return (
         <AuthProvider>
-            <AppContent />
+            <BrowserRouter>
+                <Routes>
+                    <Route path="/" element={<AppContent />} />
+                    <Route path="/callback" element={<SpotifyCallback />} />
+                </Routes>
+            </BrowserRouter>
         </AuthProvider>
     );
 };

@@ -1,0 +1,98 @@
+/* Watch Party Animations */
+
+@keyframes slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.watch-party-enter {
+  animation: slide-up 0.3s ease-out;
+}
+
+.animate-slide-up {
+  animation: slide-up 0.3s ease-out;
+}
+
+/* Video player controls hover effect */
+#youtube-player:hover + .controls-overlay {
+  opacity: 1;
+}
+
+.controls-overlay {
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.controls-overlay:hover {
+  opacity: 1;
+}
+
+/* Progress bar */
+.progress-bar {
+  position: relative;
+  cursor: pointer;
+}
+
+.progress-bar:hover .progress-thumb {
+  opacity: 1;
+}
+
+.progress-thumb {
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+/* Volume slider */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+}
+
+input[type="range"]::-webkit-slider-track {
+  background: rgba(255, 255, 255, 0.2);
+  height: 4px;
+  border-radius: 2px;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  background: white;
+  height: 12px;
+  width: 12px;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+input[type="range"]::-moz-range-track {
+  background: rgba(255, 255, 255, 0.2);
+  height: 4px;
+  border-radius: 2px;
+}
+
+input[type="range"]::-moz-range-thumb {
+  background: white;
+  height: 12px;
+  width: 12px;
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+}
+
+/* Fullscreen styles */
+.watch-party-container:fullscreen {
+  background: black;
+  padding: 0;
+}
+
+.watch-party-container:fullscreen #youtube-player {
+  height: 100vh;
+}
