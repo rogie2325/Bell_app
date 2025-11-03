@@ -40,6 +40,10 @@ export const redirectToSpotifyAuth = async () => {
   // Store code verifier in session storage
   window.sessionStorage.setItem('code_verifier', codeVerifier);
   
+  // Debug: Log the redirect URI being used
+  console.log('🔗 Using Redirect URI:', REDIRECT_URI);
+  console.log('✅ Make sure this EXACT URL is added to your Spotify Dashboard');
+  
   const authUrl = new URL('https://accounts.spotify.com/authorize');
   const params = {
     client_id: CLIENT_ID,
