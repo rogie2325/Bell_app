@@ -5,13 +5,14 @@ import {
   List, Clock, Users, ChevronUp, ChevronDown, Disc3, Radio,
   Share2, Download, MoreVertical, Trash2, History, LogIn, LogOut
 } from 'lucide-react';
-import './PassTheAux.css';
 import { 
   redirectToSpotifyAuth, 
   isAuthenticated, 
-  getStoredAccessToken, 
-  logout as spotifyLogout 
+  getStoredAccessToken,
+  logout as spotifyLogout
 } from '../utils/spotifyAuth';
+import SpotifyLogo from '../assets/spotify-logo.svg';
+import './PassTheAux.css';
 
 const PassTheAuxEnhanced = ({ roomName, participants, onClose, room, onMusicStateChange }) => {
   // State Management
@@ -596,19 +597,23 @@ const PassTheAuxEnhanced = ({ roomName, participants, onClose, room, onMusicStat
   };
   
   return (
-    <div className="pass-the-aux-enhanced bg-gradient-to-br from-purple-900/95 to-pink-900/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/20 overflow-hidden max-w-4xl w-full">
-      {/* Header */}
-      <div className="bg-gradient-to-r from-purple-600 to-pink-600 p-4 flex items-center justify-between">
+    <div className="pass-the-aux-enhanced bg-gradient-to-br from-white/10 to-white/5 backdrop-blur-2xl rounded-3xl shadow-[0_8px_32px_rgba(0,0,0,0.3)] border border-white/20 overflow-hidden max-w-4xl w-full" style={{
+      background: 'linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.05) 100%)',
+      backdropFilter: 'blur(40px) saturate(180%)',
+      WebkitBackdropFilter: 'blur(40px) saturate(180%)',
+    }}>
+      {/* Header with Glassmorphism */}
+      <div className="bg-gradient-to-r from-purple-500/30 to-pink-500/30 backdrop-blur-xl p-4 flex items-center justify-between border-b border-white/10">
         <div className="flex items-center gap-3">
-          <div className="bg-white/20 p-2 rounded-lg animate-pulse">
-            <Disc3 className="w-6 h-6 text-white" />
+          <div className="bg-white/10 backdrop-blur-md p-2 rounded-xl border border-white/20 shadow-lg">
+            <Disc3 className="w-6 h-6 text-white animate-pulse" />
           </div>
           <div>
             <h2 className="text-white font-bold text-lg flex items-center gap-2">
               Pass The Aux
-              <span className="text-xs bg-white/20 px-2 py-0.5 rounded-full">Enhanced</span>
+              <span className="text-xs bg-white/20 backdrop-blur-md px-2 py-0.5 rounded-full border border-white/30">Enhanced</span>
               {spotifyAuthenticated && isSpotifyReady && (
-                <span className="text-xs bg-green-500 px-2 py-0.5 rounded-full flex items-center gap-1">
+                <span className="text-xs bg-green-500/80 backdrop-blur-md px-2 py-0.5 rounded-full flex items-center gap-1 border border-green-400/50 shadow-lg shadow-green-500/50">
                   <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse"></span>
                   Premium
                 </span>
@@ -621,33 +626,11 @@ const PassTheAuxEnhanced = ({ roomName, participants, onClose, room, onMusicStat
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {!spotifyAuthenticated ? (
-            <button
-              onClick={redirectToSpotifyAuth}
-              className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-all text-sm font-medium"
-              title="Login with Spotify Premium for full song playback"
-            >
-              <LogIn size={16} />
-              <span>Connect Spotify Premium</span>
-            </button>
-          ) : (
-            <button
-              onClick={() => {
-                spotifyLogout();
-                setSpotifyAuthenticated(false);
-                window.location.reload();
-              }}
-              className="bg-white/10 hover:bg-white/20 text-white px-3 py-2 rounded-lg flex items-center gap-2 transition-all text-sm"
-              title="Logout from Spotify"
-            >
-              <LogOut size={16} />
-            </button>
-          )}
           <button
             onClick={onClose}
-            className="text-white/80 hover:text-white transition-colors p-2"
+            className="text-white/80 hover:text-white transition-colors p-2 hover:bg-white/10 rounded-lg"
           >
-            <X size={24} />
+            <X size={20} />
           </button>
         </div>
       </div>
@@ -782,7 +765,7 @@ const PassTheAuxEnhanced = ({ roomName, participants, onClose, room, onMusicStat
       </div>
       
       {/* Content */}
-      <div className="p-4 max-h-96 overflow-y-auto">
+      <div className="p-4 h-[calc(100vh-400px)] min-h-[500px] max-h-[600px] overflow-y-auto">
         {/* Queue Tab */}
         {activeTab === 'queue' && (
           <div className="space-y-2">
@@ -844,13 +827,20 @@ const PassTheAuxEnhanced = ({ roomName, participants, onClose, room, onMusicStat
                     : 'bg-white/10 text-white/60 hover:bg-white/20'
                 }`}
               >
-                <div className="flex items-center gap-2">
-                  <Music size={16} />
-                  <span>Spotify</span>
-                </div>
-                <span className="text-xs opacity-75">
-                  {spotifyAuthenticated && isSpotifyReady ? 'Full songs! ⭐' : '30s previews'}
-                </span>
+                {!spotifyAuthenticated ? (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      redirectToSpotifyAuth();
+                    }}
+                    className="text-xs opacity-75 hover:opacity-100 transition-opacity flex items-center gap-1"
+                  >
+                    <img src={SpotifyLogo} alt="Spotify" className="w-4 h-4" />
+                    <span>Connect to Spotify</span>
+                  </button>
+                ) : (
+                  <span className="text-xs opacity-75">Full songs! ⭐</span>
+                )}
               </button>
               <button
                 onClick={() => {
@@ -952,38 +942,6 @@ const PassTheAuxEnhanced = ({ roomName, participants, onClose, room, onMusicStat
                 <Search className="w-16 h-16 text-white/20 mx-auto mb-4" />
                 <p className="text-white/60 text-lg font-medium">Search for songs on {searchPlatform === 'spotify' ? 'Spotify' : 'YouTube'}</p>
                 <p className="text-white/40 text-sm mt-2">Type to see live suggestions</p>
-                <div className="mt-6 space-y-3 max-w-md mx-auto">
-                  {searchPlatform === 'spotify' ? (
-                    spotifyAuthenticated && isSpotifyReady ? (
-                      <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-3">
-                        <p className="text-green-200 text-sm font-medium">
-                          ✅ Full Spotify songs with Premium!
-                        </p>
-                        <p className="text-green-200/70 text-xs mt-1">
-                          You're connected and can play complete tracks
-                        </p>
-                      </div>
-                    ) : (
-                      <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3">
-                        <p className="text-yellow-200 text-sm font-medium">
-                          ℹ️ Spotify provides 30-second previews
-                        </p>
-                        <p className="text-yellow-200/70 text-xs mt-1">
-                          Click "Connect Spotify Premium" for full songs
-                        </p>
-                      </div>
-                    )
-                  ) : (
-                    <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3">
-                      <p className="text-blue-200 text-sm font-medium">
-                        💡 YouTube provides full songs
-                      </p>
-                      <p className="text-blue-200/70 text-xs mt-1">
-                        Best for uninterrupted listening
-                      </p>
-                    </div>
-                  )}
-                </div>
               </div>
             )}
           </div>
