@@ -42,9 +42,12 @@ const PassTheAuxEnhanced = ({ roomName, participants, onClose, room, onMusicStat
   const [deviceId, setDeviceId] = useState(null);
   const [isSpotifyReady, setIsSpotifyReady] = useState(false);
   const [spotifyAuthenticated, setSpotifyAuthenticated] = useState(false);
+  const [youtubePlayer, setYoutubePlayer] = useState(null);
+  const [isYoutubeReady, setIsYoutubeReady] = useState(false);
   
   const audioRef = useRef(null);
   const searchTimeoutRef = useRef(null);
+  const youtubePlayerRef = useRef(null);
   
   // Get Spotify Access Token
   useEffect(() => {
@@ -83,18 +86,65 @@ const PassTheAuxEnhanced = ({ roomName, participants, onClose, room, onMusicStat
     setSpotifyAuthenticated(isAuthenticated());
   }, []);
   
+  // Initialize YouTube IFrame Player API
+  useEffect(() => {
+    // Load YouTube IFrame API if not already loaded
+    if (!window.YT) {
+      const tag = document.createElement('script');
+      tag.src = 'https://www.youtube.com/iframe_api';
+      const firstScriptTag = document.getElementsByTagName('script')[0];
+      firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+      
+      window.onYouTubeIframeAPIReady = () => {
+        console.log('✅ YouTube IFrame API Ready');
+        setIsYoutubeReady(true);
+      };
+    } else if (window.YT && window.YT.Player) {
+      console.log('✅ YouTube IFrame API already loaded');
+      setIsYoutubeReady(true);
+    }
+  }, []);
+  
   // Initialize Spotify Web Playback SDK
   useEffect(() => {
-    if (!spotifyAuthenticated) return;
+    if (!spotifyAuthenticated) {
+      console.log('⚠️ Spotify not authenticated, skipping Web Playback SDK setup');
+      return;
+    }
     
     const userToken = getStoredAccessToken();
-    if (!userToken) return;
+    if (!userToken) {
+      console.log('⚠️ No Spotify token found, skipping Web Playback SDK setup');
+      return;
+    }
     
     const initializePlayer = () => {
+      console.log('🎵 Initializing Spotify Web Playback SDK...');
+      
       const player = new window.Spotify.Player({
         name: 'Bell - Pass The Aux',
         getOAuthToken: cb => { cb(userToken); },
         volume: volume / 100
+      });
+      
+      // Error handling
+      player.addListener('initialization_error', ({ message }) => {
+        console.error('❌ Spotify initialization error:', message);
+      });
+      
+      player.addListener('authentication_error', ({ message }) => {
+        console.error('❌ Spotify authentication error:', message);
+        console.log('💡 Try reconnecting to Spotify');
+        setIsSpotifyReady(false);
+      });
+      
+      player.addListener('account_error', ({ message }) => {
+        console.error('❌ Spotify account error:', message);
+        console.log('⚠️ Spotify Premium required for full playback');
+      });
+      
+      player.addListener('playback_error', ({ message }) => {
+        console.error('❌ Spotify playback error:', message);
       });
       
       // Ready
@@ -102,17 +152,55 @@ const PassTheAuxEnhanced = ({ roomName, participants, onClose, room, onMusicStat
         console.log('✅ Spotify Web Player ready with Device ID:', device_id);
         setDeviceId(device_id);
         setIsSpotifyReady(true);
+        
+        // Transfer playback to this device immediately
+        const transferPlayback = async () => {
+          try {
+            console.log('🔄 Transferring playback to this device...');
+            const response = await fetch('https://api.spotify.com/v1/me/player', {
+              method: 'PUT',
+              body: JSON.stringify({
+                device_ids: [device_id],
+                play: false
+              }),
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${userToken}`
+              }
+            });
+            
+            if (response.ok || response.status === 204) {
+              console.log('✅ Playback transferred successfully');
+            } else {
+              console.warn('⚠️ Playback transfer response:', response.status);
+            }
+          } catch (error) {
+            console.error('❌ Failed to transfer playback:', error);
+          }
+        };
+        
+        transferPlayback();
       });
       
       // Not Ready
       player.addListener('not_ready', ({ device_id }) => {
-        console.log('❌ Device ID has gone offline', device_id);
+        console.log('❌ Device ID has gone offline:', device_id);
         setIsSpotifyReady(false);
       });
       
       // Player state changed
       player.addListener('player_state_changed', (state) => {
-        if (!state) return;
+        if (!state) {
+          console.log('ℹ️ No state from Spotify player');
+          return;
+        }
+        
+        console.log('🎵 Spotify player state:', {
+          position: state.position,
+          duration: state.duration,
+          paused: state.paused,
+          track: state.track_window?.current_track?.name
+        });
         
         setCurrentTime(state.position);
         setDuration(state.duration);
@@ -120,15 +208,21 @@ const PassTheAuxEnhanced = ({ roomName, participants, onClose, room, onMusicStat
         
         // Auto-play next when song ends
         if (state.position === 0 && state.paused && state.duration > 0) {
+          console.log('⏭️ Song ended, playing next...');
           playNext();
         }
       });
       
       // Connect to the player
+      console.log('🔌 Connecting to Spotify...');
       player.connect().then(success => {
         if (success) {
           console.log('✅ The Web Playback SDK successfully connected to Spotify!');
+        } else {
+          console.error('❌ Failed to connect to Spotify');
         }
+      }).catch(error => {
+        console.error('❌ Error connecting to Spotify:', error);
       });
       
       setSpotifyPlayer(player);
@@ -146,6 +240,7 @@ const PassTheAuxEnhanced = ({ roomName, participants, onClose, room, onMusicStat
     // Cleanup
     return () => {
       if (spotifyPlayer) {
+        console.log('🔌 Disconnecting Spotify player...');
         spotifyPlayer.disconnect();
       }
     };
@@ -227,10 +322,11 @@ const PassTheAuxEnhanced = ({ roomName, participants, onClose, room, onMusicStat
         artist: item.snippet.channelTitle,
         album: 'YouTube',
         duration: 0, // YouTube API v3 doesn't provide duration in search, would need additional call
-        previewUrl: `https://www.youtube.com/watch?v=${item.id.videoId}`,
+        previewUrl: null, // YouTube doesn't provide audio-only URLs
         albumArt: item.snippet.thumbnails.high?.url || item.snippet.thumbnails.default?.url,
         platform: 'youtube',
-        uri: `youtube:${item.id.videoId}`
+        uri: `youtube:${item.id.videoId}`,
+        youtubeId: item.id.videoId // Store the video ID for the iframe player
       }));
     } catch (error) {
       console.error('YouTube search failed:', error);
@@ -393,7 +489,11 @@ const PassTheAuxEnhanced = ({ roomName, participants, onClose, room, onMusicStat
     if (nextSong.platform === 'spotify' && spotifyAuthenticated && isSpotifyReady && deviceId) {
       try {
         const userToken = getStoredAccessToken();
-        await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${deviceId}`, {
+        console.log('🎵 Attempting to play Spotify track:', nextSong.name);
+        console.log('  - Device ID:', deviceId);
+        console.log('  - URI:', nextSong.uri);
+        
+        const response = await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${deviceId}`, {
           method: 'PUT',
           body: JSON.stringify({ uris: [nextSong.uri] }),
           headers: {
@@ -401,14 +501,36 @@ const PassTheAuxEnhanced = ({ roomName, participants, onClose, room, onMusicStat
             'Authorization': `Bearer ${userToken}`
           },
         });
+        
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error('❌ Spotify API error:', response.status, errorText);
+          throw new Error(`Spotify API error: ${response.status}`);
+        }
+        
         setIsPlaying(true);
         console.log('✅ Playing full Spotify track via Web Playback SDK');
       } catch (error) {
-        console.error('❌ Failed to play via Web Playback SDK, falling back to preview:', error);
-        setIsPlaying(true); // Will use audioRef fallback
+        console.error('❌ Failed to play via Web Playback SDK:', error);
+        console.log('⚠️ Falling back to preview (if available)');
+        // Fall back to preview URL if Web Playback fails
+        if (nextSong.previewUrl && nextSong.previewUrl !== 'null' && nextSong.previewUrl !== null) {
+          setIsPlaying(true); // Will use audioRef fallback
+        } else {
+          console.log('⏭️ No preview available, skipping to next song');
+          setTimeout(() => playNext(), 1000);
+          return;
+        }
       }
     } else {
       setIsPlaying(true); // Will use audioRef for YouTube or Spotify previews
+    }
+    
+    // Initialize YouTube player if it's a YouTube video
+    if (nextSong.platform === 'youtube' && isYoutubeReady && nextSong.youtubeId) {
+      console.log('📺 Playing YouTube video:', nextSong.name);
+      console.log('  - Video ID:', nextSong.youtubeId);
+      // YouTube player will be initialized in the useEffect below
     }
     
     broadcastMessage({
@@ -507,6 +629,13 @@ const PassTheAuxEnhanced = ({ roomName, participants, onClose, room, onMusicStat
       spotifyPlayer.pause();
     }
     
+    // Stop YouTube playback if using YouTube player
+    if (youtubePlayer) {
+      youtubePlayer.stopVideo();
+      youtubePlayer.destroy();
+      setYoutubePlayer(null);
+    }
+    
     // Pause audio element
     if (audioRef.current) {
       audioRef.current.pause();
@@ -526,6 +655,11 @@ const PassTheAuxEnhanced = ({ roomName, participants, onClose, room, onMusicStat
       // Stop music
       setIsPlaying(false);
       if (spotifyPlayer) spotifyPlayer.pause();
+      if (youtubePlayer) {
+        youtubePlayer.stopVideo();
+        youtubePlayer.destroy();
+        setYoutubePlayer(null);
+      }
       if (audioRef.current) audioRef.current.pause();
       
       // Clear everything
@@ -577,6 +711,10 @@ const PassTheAuxEnhanced = ({ roomName, participants, onClose, room, onMusicStat
           if (message.song.platform === 'spotify' && spotifyAuthenticated && isSpotifyReady && deviceId) {
             // Play via Spotify Web Playback SDK
             const userToken = getStoredAccessToken();
+            console.log('🎵 Remote playback sync - playing:', message.song.name);
+            console.log('  - Device ID:', deviceId);
+            console.log('  - URI:', message.song.uri);
+            
             fetch(`https://api.spotify.com/v1/me/player/play?device_id=${deviceId}`, {
               method: 'PUT',
               body: JSON.stringify({ uris: [message.song.uri] }),
@@ -584,7 +722,17 @@ const PassTheAuxEnhanced = ({ roomName, participants, onClose, room, onMusicStat
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${userToken}`
               },
-            }).catch(err => console.error('Failed to sync Spotify playback:', err));
+            }).then(response => {
+              if (!response.ok) {
+                console.error('❌ Remote playback failed:', response.status);
+                return response.text().then(text => {
+                  console.error('Error details:', text);
+                });
+              }
+              console.log('✅ Remote playback synced successfully');
+            }).catch(err => {
+              console.error('❌ Failed to sync Spotify playback:', err);
+            });
           }
           break;
           
@@ -614,6 +762,11 @@ const PassTheAuxEnhanced = ({ roomName, participants, onClose, room, onMusicStat
           setIsPlaying(false);
           setPlayHistory([]);
           if (spotifyPlayer) spotifyPlayer.pause();
+          if (youtubePlayer) {
+            youtubePlayer.stopVideo();
+            youtubePlayer.destroy();
+            setYoutubePlayer(null);
+          }
           if (audioRef.current) audioRef.current.pause();
           if (onMusicStateChange) onMusicStateChange(false);
           break;
@@ -646,6 +799,17 @@ const PassTheAuxEnhanced = ({ roomName, participants, onClose, room, onMusicStat
       // Skip audio element setup if using Spotify Web Playback SDK
       if (currentSong.platform === 'spotify' && spotifyAuthenticated && isSpotifyReady && deviceId) {
         console.log('🎵 Using Spotify Web Playback SDK, skipping audio element');
+        // Clear any existing audio source to prevent errors
+        audioRef.current.pause();
+        audioRef.current.src = '';
+        return;
+      }
+      
+      // Skip audio element if it's a YouTube video
+      if (currentSong.platform === 'youtube') {
+        console.log('📺 Using YouTube IFrame Player, skipping audio element');
+        audioRef.current.pause();
+        audioRef.current.src = '';
         return;
       }
       
@@ -659,17 +823,111 @@ const PassTheAuxEnhanced = ({ roomName, participants, onClose, room, onMusicStat
         return;
       }
       
+      console.log('🎵 Setting audio source:', audioUrl);
       audioRef.current.src = audioUrl;
       
       if (isPlaying) {
         audioRef.current.play().catch(error => {
-          console.error('Playback failed:', error);
+          console.error('❌ Playback failed:', error);
           console.log('⏭️ Trying next song...');
           setTimeout(() => playNext(), 1000);
         });
       }
     }
   }, [currentSong, isPlaying]);
+  
+  // Initialize YouTube player when song changes
+  useEffect(() => {
+    if (currentSong && currentSong.platform === 'youtube' && isYoutubeReady && currentSong.youtubeId) {
+      console.log('🎬 Initializing YouTube player for:', currentSong.name);
+      
+      // Destroy existing player if any
+      if (youtubePlayer) {
+        console.log('🗑️ Destroying previous YouTube player');
+        youtubePlayer.destroy();
+      }
+      
+      // Create new player
+      const player = new window.YT.Player('youtube-player', {
+        height: '0',
+        width: '0',
+        videoId: currentSong.youtubeId,
+        playerVars: {
+          autoplay: 1,
+          controls: 0,
+          modestbranding: 1,
+          rel: 0
+        },
+        events: {
+          onReady: (event) => {
+            console.log('✅ YouTube player ready');
+            if (isPlaying) {
+              event.target.playVideo();
+            }
+            setYoutubePlayer(event.target);
+          },
+          onStateChange: (event) => {
+            console.log('📺 YouTube player state:', event.data);
+            // 0 = ended, 1 = playing, 2 = paused
+            if (event.data === window.YT.PlayerState.ENDED) {
+              console.log('⏭️ YouTube video ended, playing next...');
+              playNext();
+            } else if (event.data === window.YT.PlayerState.PLAYING) {
+              setIsPlaying(true);
+            } else if (event.data === window.YT.PlayerState.PAUSED) {
+              setIsPlaying(false);
+            }
+          },
+          onError: (event) => {
+            console.error('❌ YouTube player error:', event.data);
+            console.log('⏭️ Skipping to next song...');
+            setTimeout(() => playNext(), 1000);
+          }
+        }
+      });
+      
+      setYoutubePlayer(player);
+    }
+  }, [currentSong, isYoutubeReady]);
+  
+  // Control YouTube player based on isPlaying state
+  useEffect(() => {
+    if (youtubePlayer && currentSong && currentSong.platform === 'youtube') {
+      if (isPlaying) {
+        console.log('▶️ Playing YouTube video');
+        youtubePlayer.playVideo();
+      } else {
+        console.log('⏸️ Pausing YouTube video');
+        youtubePlayer.pauseVideo();
+      }
+    }
+  }, [isPlaying, youtubePlayer]);
+  
+  // Update volume for all players
+  useEffect(() => {
+    const volumeValue = volume / 100;
+    
+    // Update audio element volume
+    if (audioRef.current) {
+      audioRef.current.volume = volumeValue;
+      console.log('🔊 Audio element volume set to:', volumeValue);
+    }
+    
+    // Update Spotify player volume
+    if (spotifyPlayer && currentSong && currentSong.platform === 'spotify') {
+      spotifyPlayer.setVolume(volumeValue).then(() => {
+        console.log('🔊 Spotify player volume set to:', volumeValue);
+      }).catch(err => {
+        console.warn('⚠️ Failed to set Spotify volume:', err);
+      });
+    }
+    
+    // Update YouTube player volume
+    if (youtubePlayer && currentSong && currentSong.platform === 'youtube') {
+      youtubePlayer.setVolume(volume); // YouTube uses 0-100 scale
+      console.log('🔊 YouTube player volume set to:', volume);
+    }
+  }, [volume, spotifyPlayer, youtubePlayer, currentSong]);
   
   // Notify parent of music state
   useEffect(() => {
@@ -773,6 +1031,12 @@ const PassTheAuxEnhanced = ({ roomName, participants, onClose, room, onMusicStat
                           Full Track
                         </span>
                       )}
+                      {currentSong.platform === 'youtube' && isYoutubeReady && (
+                        <span className="bg-red-500/80 backdrop-blur-md px-3 py-1 rounded-full text-xs text-white font-semibold border border-red-400/50 flex items-center gap-1">
+                          <span className="w-2 h-2 bg-white rounded-full animate-pulse"></span>
+                          YouTube
+                        </span>
+                      )}
                     </div>
                   </div>
                   
@@ -855,10 +1119,11 @@ const PassTheAuxEnhanced = ({ roomName, participants, onClose, room, onMusicStat
                 min="0"
                 max="100"
                 value={volume}
-                onChange={(e) => setVolume(e.target.value)}
+                onChange={(e) => setVolume(Number(e.target.value))}
                 className="w-28 h-2 bg-white/20 rounded-full accent-pink-400 cursor-pointer"
               />
               <Volume2 size={18} className="text-white/70" />
+              <span className="text-white/70 text-xs font-medium min-w-[2.5rem] text-right">{volume}%</span>
             </div>
             
             {/* Skip Vote */}
@@ -1124,8 +1389,10 @@ const PassTheAuxEnhanced = ({ roomName, participants, onClose, room, onMusicStat
         onTimeUpdate={(e) => setCurrentTime(e.target.currentTime * 1000)}
         onLoadedMetadata={(e) => setDuration(e.target.duration * 1000)}
         onEnded={playNext}
-        volume={volume / 100}
       />
+      
+      {/* Hidden YouTube Player */}
+      <div id="youtube-player" style={{ display: 'none' }}></div>
     </div>
   );
 };

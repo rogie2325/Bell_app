@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   X, Play, Pause, Volume2, VolumeX, Maximize, Search, 
-  Youtube, Clock, Users, Share2, Plus, LogOut, Monitor, ChevronDown
+  Youtube, Clock, Users, Share2, Plus, LogOut, Monitor, ChevronDown, Film
 } from 'lucide-react';
+import { searchNetflix } from '../utils/netflixSearch';
 
 const WatchParty = ({ room, participants, onClose, onVideoStateChange }) => {
   const [videoUrl, setVideoUrl] = useState('');
@@ -24,6 +25,10 @@ const WatchParty = ({ room, participants, onClose, onVideoStateChange }) => {
   const [screenStream, setScreenStream] = useState(null);
   const [showSourceMenu, setShowSourceMenu] = useState(false);
   const [shareMode, setShareMode] = useState('youtube'); // 'youtube' or 'screen'
+  const [searchPlatform, setSearchPlatform] = useState('youtube'); // 'youtube' or 'netflix'
+  const [netflixResults, setNetflixResults] = useState([]);
+  const [selectedNetflixItem, setSelectedNetflixItem] = useState(null);
+  const [showNetflixModal, setShowNetflixModal] = useState(false);
   
   const playerRef = useRef(null);
   const playerContainerRef = useRef(null);
@@ -99,6 +104,29 @@ const WatchParty = ({ room, participants, onClose, onVideoStateChange }) => {
     }
   };
   
+  // Search Netflix
+  const performNetflixSearch = async (query) => {
+    if (!query.trim()) {
+      setNetflixResults([]);
+      return;
+    }
+    
+    setIsSearching(true);
+    try {
+      console.log('🎬 Searching Netflix for:', query);
+      const results = await searchNetflix(query);
+      console.log('✅ Netflix results:', results);
+      setNetflixResults(results);
+      setShowSuggestions(true);
+    } catch (error) {
+      console.error('❌ Netflix search failed:', error);
+      setNetflixResults([]);
+      alert('Netflix search failed: ' + error.message);
+    } finally {
+      setIsSearching(false);
+    }
+  };
+  
   // Handle search input change with debouncing
   const handleSearchInputChange = (e) => {
     const value = e.target.value;
@@ -114,11 +142,16 @@ const WatchParty = ({ room, participants, onClose, onVideoStateChange }) => {
       setShowSuggestions(true);
       // Debounce search - wait 500ms after user stops typing
       searchTimeoutRef.current = setTimeout(() => {
-        searchYouTube(value, true);
+        if (searchPlatform === 'youtube') {
+          searchYouTube(value, true);
+        } else if (searchPlatform === 'netflix') {
+          performNetflixSearch(value);
+        }
       }, 500);
     } else {
       setShowSuggestions(false);
       setSearchResults([]);
+      setNetflixResults([]);
     }
   };
   
@@ -126,7 +159,11 @@ const WatchParty = ({ room, participants, onClose, onVideoStateChange }) => {
   const handleSearch = (e) => {
     e?.preventDefault();
     if (searchQuery.trim()) {
-      searchYouTube(searchQuery, true);
+      if (searchPlatform === 'youtube') {
+        searchYouTube(searchQuery, true);
+      } else if (searchPlatform === 'netflix') {
+        performNetflixSearch(searchQuery);
+      }
       setShowSuggestions(true);
     }
   };
@@ -540,6 +577,116 @@ const WatchParty = ({ room, participants, onClose, onVideoStateChange }) => {
   
   return (
     <div className="bg-black/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/10 overflow-hidden max-w-4xl w-full">
+      {/* Netflix Details Modal */}
+      {showNetflixModal && selectedNetflixItem && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4" onClick={() => setShowNetflixModal(false)}>
+          <div className="bg-gradient-to-br from-gray-900 to-black rounded-2xl max-w-2xl w-full border border-white/20 overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            {/* Poster Image */}
+            <div className="relative h-64 bg-gradient-to-br from-red-900/50 to-black">
+              <img
+                src={selectedNetflixItem.image}
+                alt={selectedNetflixItem.title}
+                className="w-full h-full object-cover opacity-50"
+                onError={(e) => {
+                  e.target.src = 'https://via.placeholder.com/800x400?text=Netflix';
+                }}
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-black via-black/50 to-transparent"></div>
+              <button
+                onClick={() => setShowNetflixModal(false)}
+                className="absolute top-4 right-4 text-white/80 hover:text-white bg-black/50 hover:bg-black/70 rounded-full p-2 transition-all"
+              >
+                <X size={24} />
+              </button>
+            </div>
+            
+            {/* Content */}
+            <div className="p-6 space-y-4">
+              <div>
+                <div className="flex items-start justify-between gap-4 mb-2">
+                  <h3 className="text-white text-2xl font-bold flex-1">{selectedNetflixItem.title}</h3>
+                  {selectedNetflixItem.type && (
+                    <span className="bg-red-600 text-white text-xs px-3 py-1 rounded-full font-semibold">
+                      {selectedNetflixItem.type.toUpperCase()}
+                    </span>
+                  )}
+                </div>
+                
+                <div className="flex items-center gap-3 text-white/60 text-sm">
+                  {selectedNetflixItem.year && <span>{selectedNetflixItem.year}</span>}
+                  {selectedNetflixItem.rating && <span>⭐ {selectedNetflixItem.rating}</span>}
+                  {selectedNetflixItem.runtime && <span>{selectedNetflixItem.runtime} min</span>}
+                  {selectedNetflixItem.seasons && <span>{selectedNetflixItem.seasons} season{selectedNetflixItem.seasons > 1 ? 's' : ''}</span>}
+                </div>
+              </div>
+              
+              {selectedNetflixItem.description && (
+                <p className="text-white/80 text-sm leading-relaxed line-clamp-4">
+                  {selectedNetflixItem.description}
+                </p>
+              )}
+              
+              {selectedNetflixItem.genres && selectedNetflixItem.genres.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {selectedNetflixItem.genres.slice(0, 5).map((genre, idx) => (
+                    <span key={idx} className="bg-white/10 text-white/80 text-xs px-3 py-1 rounded-full">
+                      {genre}
+                    </span>
+                  ))}
+                </div>
+              )}
+              
+              {selectedNetflixItem.cast && selectedNetflixItem.cast.length > 0 && (
+                <div>
+                  <p className="text-white/60 text-xs mb-1">Cast</p>
+                  <p className="text-white/80 text-sm">
+                    {selectedNetflixItem.cast.slice(0, 3).join(', ')}
+                  </p>
+                </div>
+              )}
+              
+              {/* Action Buttons */}
+              <div className="flex gap-3 pt-4">
+                {selectedNetflixItem.trailerUrl && (
+                  <button
+                    onClick={() => {
+                      setInputUrl(selectedNetflixItem.trailerUrl);
+                      handleStartWatchParty(selectedNetflixItem.trailerUrl);
+                      setShowNetflixModal(false);
+                      setShowSuggestions(false);
+                    }}
+                    className="flex-1 bg-gradient-to-r from-red-600 to-pink-600 hover:from-red-700 hover:to-pink-700 text-white font-semibold py-3 rounded-xl transition-all flex items-center justify-center gap-2"
+                  >
+                    <Play size={20} />
+                    Watch Trailer Together
+                  </button>
+                )}
+                
+                {selectedNetflixItem.netflixUrl && (
+                  <button
+                    onClick={() => {
+                      window.open(selectedNetflixItem.netflixUrl, '_blank');
+                      // Haptic feedback
+                      if (navigator.vibrate) {
+                        navigator.vibrate(50);
+                      }
+                    }}
+                    className="flex-1 bg-white/10 hover:bg-white/20 text-white font-semibold py-3 rounded-xl transition-all flex items-center justify-center gap-2"
+                  >
+                    <Film size={20} />
+                    Open on Netflix
+                  </button>
+                )}
+              </div>
+              
+              <p className="text-white/40 text-xs text-center pt-2">
+                💡 Tip: Watch trailers together, then head to Netflix to watch the full title!
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+      
       {/* Header */}
       <div className="bg-gradient-to-r from-red-600 to-pink-600 p-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
@@ -645,17 +792,60 @@ const WatchParty = ({ room, participants, onClose, onVideoStateChange }) => {
             {shareMode === 'youtube' && (
             <>
             <div className="space-y-4">
+              {/* Platform Selector - YouTube vs Netflix */}
+              <div className="flex gap-2 mb-4">
+                <button
+                  onClick={() => {
+                    setSearchPlatform('youtube');
+                    setSearchQuery('');
+                    setSearchResults([]);
+                    setNetflixResults([]);
+                    setShowSuggestions(false);
+                  }}
+                  className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-medium transition-all ${
+                    searchPlatform === 'youtube'
+                      ? 'bg-gradient-to-r from-red-600 to-red-700 text-white shadow-lg shadow-red-500/50'
+                      : 'bg-white/10 text-white/60 hover:bg-white/20'
+                  }`}
+                >
+                  <Youtube size={20} />
+                  <span>YouTube</span>
+                </button>
+                
+                <button
+                  onClick={() => {
+                    setSearchPlatform('netflix');
+                    setSearchQuery('');
+                    setSearchResults([]);
+                    setNetflixResults([]);
+                    setShowSuggestions(false);
+                  }}
+                  className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-medium transition-all ${
+                    searchPlatform === 'netflix'
+                      ? 'bg-gradient-to-r from-red-600 to-black text-white shadow-lg shadow-red-500/50'
+                      : 'bg-white/10 text-white/60 hover:bg-white/20'
+                  }`}
+                >
+                  <Film size={20} />
+                  <span>Netflix</span>
+                </button>
+              </div>
+              
               {/* Search Bar */}
               <div className="relative search-container">
                 <form onSubmit={handleSearch}>
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-white/40 z-10" />
                   <input
                     type="text"
-                    placeholder="Search YouTube videos..."
+                    placeholder={searchPlatform === 'youtube' ? 'Search YouTube videos...' : 'Search Netflix movies & shows...'}
                     value={searchQuery}
                     onChange={handleSearchInputChange}
                     onFocus={() => {
-                      if (searchResults.length > 0) setShowSuggestions(true);
+                      if (searchPlatform === 'youtube' && searchResults.length > 0) {
+                        setShowSuggestions(true);
+                      } else if (searchPlatform === 'netflix' && netflixResults.length > 0) {
+                        setShowSuggestions(true);
+                      }
                     }}
                     className="w-full pl-10 pr-24 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-red-400"
                   />
@@ -668,8 +858,8 @@ const WatchParty = ({ room, participants, onClose, onVideoStateChange }) => {
                   </button>
                 </form>
                 
-                {/* Live Search Suggestions Dropdown */}
-                {showSuggestions && searchResults.length > 0 && (
+                {/* YouTube Search Suggestions Dropdown */}
+                {showSuggestions && searchPlatform === 'youtube' && searchResults.length > 0 && (
                   <div className="absolute top-full left-0 right-0 mt-2 bg-black/95 backdrop-blur-xl border border-white/20 rounded-xl shadow-2xl max-h-96 overflow-y-auto z-50 animate-slide-up">
                     <div className="p-2 space-y-1">
                       {searchResults.map((video) => (
@@ -694,6 +884,53 @@ const WatchParty = ({ room, participants, onClose, onVideoStateChange }) => {
                           <Play className="w-4 h-4 text-white/40 group-hover:text-red-400 transition-colors flex-shrink-0" />
                         </button>
                       ))}
+                    </div>
+                  </div>
+                )}
+                
+                {/* Netflix Search Results Grid */}
+                {showSuggestions && searchPlatform === 'netflix' && netflixResults.length > 0 && (
+                  <div className="absolute top-full left-0 right-0 mt-2 bg-black/95 backdrop-blur-xl border border-white/20 rounded-xl shadow-2xl max-h-[500px] overflow-y-auto z-50 animate-slide-up">
+                    <div className="p-3">
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                        {netflixResults.map((item) => (
+                          <button
+                            key={item.id}
+                            onClick={() => {
+                              setSelectedNetflixItem(item);
+                              setShowNetflixModal(true);
+                            }}
+                            className="bg-white/5 hover:bg-white/10 rounded-lg overflow-hidden transition-all text-left group"
+                          >
+                            <div className="relative aspect-[2/3]">
+                              <img
+                                src={item.image}
+                                alt={item.title}
+                                className="w-full h-full object-cover"
+                                onError={(e) => {
+                                  e.target.src = 'https://via.placeholder.com/300x450?text=No+Image';
+                                }}
+                              />
+                              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-2">
+                                <Play className="w-6 h-6 text-white" />
+                              </div>
+                              {item.type && (
+                                <div className="absolute top-2 right-2 bg-red-600 text-white text-xs px-2 py-1 rounded">
+                                  {item.type === 'series' ? 'TV' : 'Movie'}
+                                </div>
+                              )}
+                            </div>
+                            <div className="p-2">
+                              <p className="text-white text-sm font-medium line-clamp-1 group-hover:text-red-400 transition-colors">
+                                {item.title}
+                              </p>
+                              {item.year && (
+                                <p className="text-white/60 text-xs">{item.year}</p>
+                              )}
+                            </div>
+                          </button>
+                        ))}
+                      </div>
                     </div>
                   </div>
                 )}
@@ -755,6 +992,14 @@ const WatchParty = ({ room, participants, onClose, onVideoStateChange }) => {
                 <div className="bg-white/5 rounded-lg p-3">
                   <div className="text-white/60 text-xs mb-1">Shared Controls</div>
                   <div className="text-white text-sm font-medium">Host controls playback</div>
+                </div>
+                <div className="bg-white/5 rounded-lg p-3">
+                  <div className="text-white/60 text-xs mb-1">YouTube</div>
+                  <div className="text-white text-sm font-medium">Search & watch videos</div>
+                </div>
+                <div className="bg-white/5 rounded-lg p-3">
+                  <div className="text-white/60 text-xs mb-1">Netflix</div>
+                  <div className="text-white text-sm font-medium">Browse trailers & titles</div>
                 </div>
               </div>
             </div>
